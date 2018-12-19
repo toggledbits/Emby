@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- I_Emby1.xml -->
+<implementation>
+    <functions>
+        -- --------------------------------------------------------------------
+        -- Emby
+        -- Copyright 2018 Patrick H. Rigney, All Rights Reserved.
+        -- https://www.toggledbits.com/emby
+        -- --------------------------------------------------------------------
+        function startupEmbyPlugin(devNum)
+            luup.log("EmbyPlugin STARTUP!")
+            EmbyPlugin = require("L_Emby1")
+            if not EmbyPlugin then 
+                luup.log("EmbyPlugin startup FAILED",1)
+                return false
+            end
+            embyRequestHandler = EmbyPlugin.handleLuupRequest
+            embyWatchCallback = EmbyPlugin.watchCallback
+            embyTaskTick = EmbyPlugin.taskTickCallback
+            luup.register_handler("embyRequestHandler", "Emby")
+            return EmbyPlugin.startPlugin(devNum)
+        end
+    </functions>
+    <startup>startupEmbyPlugin</startup>
+    <actionList>
+    </actionList>
+</implementation>

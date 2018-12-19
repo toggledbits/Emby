@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- S_Reactor.xml -->
+<scpd xmlns="urn:schemas-upnp-org:service-1-0">
+    <specVersion>
+        <major>1</major>
+        <minor>0</minor>
+    </specVersion>
+    <serviceStateTable>
+        <stateVariable sendEvents="yes">
+            <name>Message</name>
+            <dataType>string</dataType>
+            <defaultValue></defaultValue>
+            <shortCode>message</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>misc_arg</name>
+            <dataType>ui4</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>bool_arg</name>
+            <dataType>boolean</dataType>
+        </stateVariable>
+    </serviceStateTable>
+    <actionList>
+    </actionList>
+</scpd>
