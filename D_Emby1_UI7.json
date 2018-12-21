@@ -164,7 +164,7 @@
 					},
 					"Label": {
 						"lang_tag": "tb_emby_about",
-						"text": "Emby ver 0.1develop-181219 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"#\" target=\"_blank\">Support Forum Thread</a> &#149; <a href=\"http://www.toggledbits.com/emby\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Emby&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
+						"text": "Emby ver 0.1develop-181221 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"#\" target=\"_blank\">Support Forum Thread</a> &#149; <a href=\"http://www.toggledbits.com/emby\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Emby&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
 					}
 				}
 			],
