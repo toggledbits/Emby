@@ -7,7 +7,7 @@
 
 module("L_Emby1", package.seeall)
 
-local debugMode = false
+local debugMode = true
 
 local _PLUGIN_ID = 99999
 local _PLUGIN_NAME = "Emby"
@@ -15,11 +15,26 @@ local _PLUGIN_VERSION = "0.1-181219"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
 local _CONFIGVERSION = 000000
 
+local APIKEY = "a2d9644ff03b4c6883744c12e801ba2a" -- ??? TEMPORARY
+
+local math = require("math")
+local string = require("string")
+local socket = require("socket")
+local http = require("socket.http")
+local ltn12 = require("ltn12")
+local json = require("dkjson")
+
 local MYSID = "urn:toggledbits-com:serviceId:Emby1"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Emby:1"
 
+local SERVERSID = "urn:toggledbits-com:serviceId:EmbyServer1"
+local SERVERTYPE = "urn:schemas-toggledbits-com:device:EmbyServer:1"
+local SESSIONSID = "urn:toggledbits-com:serviceId:EmbySession1"
+local SESSIONTYPE = "urn:schemas-toggledbits-com:device:EmbySession:1"
+
 local tickTasks = {}
 local maxEvents = 50
+local devData = {}
 
 local runStamp = 0
 local pluginDevice = 0
@@ -127,6 +142,20 @@ local function shallowCopy( t )
     return r
 end
 
+-- Array to map, where f(elem) returns key[,value]
+local function map( arr, f, res )
+    res = res or {}
+    for _,x in ipairs( arr ) do
+        if f then
+            local k,v = f( x )
+            res[k] = (v == nil) and x or v
+        else
+            res[x] = x
+        end
+    end
+    return res
+end
+
 -- Initialize a variable if it does not already exist.
 local function initVar( name, dflt, dev, sid )
     assert( dev ~= nil )
@@ -141,7 +170,9 @@ end
 
 -- Set variable, only if value has changed.
 local function setVar( sid, name, val, dev )
-    local s = luup.variable_get( sid, name, dev )
+    val = (val == nil) and "" or tostring(val)
+    local s = luup.variable_get( sid, name, dev ) or ""
+    -- D("setVar(%1,%2,%3,%4) old value %5", sid, name, val, dev, s )
     if s ~= val then
         luup.variable_set( sid, name, val, dev )
         return val
@@ -153,12 +184,11 @@ end
 local function getVarNumeric( name, dflt, dev, sid )
     assert( dev ~= nil )
     assert( name ~= nil )
-    if sid == nil then sid = RSSID end
-    local s = luup.variable_get( sid, name, dev )
-    if (s == nil or s == "") then return dflt end
-    s = tonumber(s, 10)
-    if (s == nil) then return dflt end
-    return s
+    assert( sid ~= nil )
+    local s = luup.variable_get( sid, name, dev ) or ""
+    if s == "" then return dflt end
+    s = tonumber(s)
+    return (s == nil) and dflt or s
 end
 
 -- Find device by name
@@ -180,14 +210,14 @@ local function addEvent( t )
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
     local dev = p.dev or pluginDevice
-    sensorState[tostring(dev)] = sensorState[tostring(dev)] or { eventList={} }
-    table.insert( sensorState[tostring(dev)].eventList, p )
-    if #sensorState[tostring(dev)].eventList > maxEvents then table.remove(sensorState[tostring(dev)].eventList, 1) end
+    devData[tostring(dev)] = devData[tostring(dev)] or { eventList={} }
+    table.insert( devData[tostring(dev)].eventList, p )
+    if #devData[tostring(dev)].eventList > maxEvents then table.remove(devData[tostring(dev)].eventList, 1) end
 end
 
 -- Enabled?
 local function isEnabled( dev )
-    return getVarNumeric( "Enabled", 1, dev, RSSID ) ~= 0
+    return getVarNumeric( "Enabled", 1, dev, MYSID ) ~= 0
 end
 
 -- Schedule a timer tick for a future (absolute) time. If the time is sooner than
@@ -242,11 +272,629 @@ local function scheduleDelay( tinfo, delay, flags )
     return scheduleTick( tinfo, delay+os.time(), flags )
 end
 
+local function gatewayStatus( m )
+    setVar( MYSID, "Message", m or "", pluginDevice )
+end
+
+local function getChildDevices( typ, parent, filter )
+    parent = parent or pluginDevice
+    local res = {}
+    for k,v in pairs(luup.devices) do
+        if v.device_num_parent == parent and v.device_type == typ and (filter==nil or filter(k, v)) then
+            table.insert( res, k )
+        end
+    end
+    return res
+end
+
+local function findChildById( childId, parent )
+    parent = parent or pluginDevice
+    for k,v in pairs(luup.devices) do
+        if v.device_num_parent == parent and v.id == childId then return k,v end
+    end
+    return false
+end
+
+--[[ Prep for adding new children via the luup.chdev mechanism. The existingChildren
+     table (array) should contain device IDs of existing children that will be
+     preserved. Any existing child not listed will be dropped. If the table is nil,
+     all existing children in luup.devices will be preserved.
+--]]     
+local function prepForNewChildren( existingChildren )
+    D("prepForNewChildren(%1)", existingChildren)
+    local dfMap = { [SERVERTYPE]="D_EmbyServer1.xml", [SESSIONTYPE]="D_EmbySession1.xml" }
+    if existingChildren == nil then
+        existingChildren = {}
+        for k,v in pairs( luup.devices ) do
+            if v.device_num_parent == pluginDevice then
+                assert(dfMap[v.device_type]~=nil, "BUG: device type missing from dfMap: "..v.device_type)
+                table.insert( existingChildren, k )
+            end
+        end
+    end
+    local ptr = luup.chdev.start( pluginDevice )
+    for _,k in ipairs( existingChildren ) do
+        local v = luup.devices[k]
+        assert(v)
+        assert(v.device_num_parent == pluginDevice)
+        D("adding child %1 (%2/%3)", v.description, k, v.id)
+        luup.chdev.append( pluginDevice, ptr, v.id, v.description, "", 
+            dfMap[v.device_type] or error("Invalid device type in child "..k), 
+            "", "", false )
+    end
+    return ptr, existingChildren
+end
+
+local function doRequest(method, url, tHeaders, body, dev)
+    D("doRequest(%1,%2,%3,%4,%5)", method, url, tHeaders, body, dev)
+    assert(dev ~= nil)
+    method = method or "GET"
+    
+    local headers = tHeaders and shallowCopy(tHeaders) or {}
+    if headers['X-Application'] == nil then headers['X-Application'] = "ToggledBits-Vera-Emby/" .. _PLUGIN_VERSION end
+
+    -- A few other knobs we can turn
+    local timeout = getVarNumeric("Timeout", 30, dev, MYSID) -- ???
+    -- local maxlength = getVarNumeric("MaxLength", 262144, dev, DEVICESID) -- ???
+
+    -- Build post/put data
+    local src
+    if type(body) == "table" then
+        body = json.encode(body)
+        headers["Content-Type"] = "application/json"
+        D("doRequest() converted table to JSON body %1", body)
+    else
+        -- Caller should set Content-Type
+    end
+    headers["Content-Length"] = string.len(body or "")
+    if body ~= nil then 
+        src = ltn12.source.string(body) 
+    end
+
+    --[[
+    -- Basic Auth
+    local baUser = luup.variable_get( DEVICESID, "HTTPUser", dev ) or ""
+    if baUser ~= "" then
+        local baPass = luup.variable_get( DEVICESID, "HTTPPassword", dev ) or ""
+        baUser = baUser .. ":" .. baPass
+        local mime = require("mime")
+        headers.Authorization = "Basic " + mime.b64( baUser )
+    end
+    --]]
+
+    -- Make the request.
+    local respBody, httpStatus
+    local r = {}
+    http.TIMEOUT = timeout -- N.B. http not https, regardless
+    D("doRequest() requesting %2 %1, headers=%3", url, method, headers)
+    respBody, httpStatus = http.request{
+        url = url,
+        source = src,
+        sink = ltn12.sink.table(r),
+        method = method,
+        headers = headers,
+        redirect = false
+    }
+    D("doRequest() request returned httpStatus=%1, respBody=%2", httpStatus, respBody)
+
+    -- Since we're using the table sink, concatenate chunks to single string.
+    respBody = table.concat(r)
+
+    D("doRequest() response HTTP status %1, body=" .. respBody, httpStatus) -- use concat to avoid quoting
+
+    -- Handle special errors from socket library
+    if tonumber(httpStatus) == nil then
+        respBody = httpStatus
+        httpStatus = 500
+    end
+
+    -- See what happened. Anything 2xx we reduce to 200 (OK).
+    if httpStatus >= 200 and httpStatus <= 299 then
+        -- Success response with no data, take shortcut.
+        return true, respBody, 200
+    end
+    if httpStatus == 401 then L{level=1,msg="API responded with authentication failure; check access token."} end
+    return false, respBody, httpStatus
+end
+
+-- API request to server via local address
+local function serverRequest( method, path, params, headers, body, dev )
+    D("serverRequest(%1,%2,%3,%4,%5,%6)", method, path, params, headers, body, dev)
+    assert(dev~=nil and luup.devices[dev].device_type==SERVERTYPE)
+    local ea = {}
+    for k,v in pairs(params or {}) do
+        table.insert( ea, k .. "=" .. urlencode(tostring(v)) )
+    end
+    if not (params and params.api_key) then
+        table.insert( ea, "api_key=" .. urlencode(luup.variable_get( SERVERSID, "APIKey", dev ) or "") )
+    end
+    local fullurl = luup.variable_get( SERVERSID, "LocalAddress", dev ) or "http://localhost:8096"
+    fullurl = fullurl .. "/" .. path .. "?" .. table.concat( ea, "&" )
+    local success, resp, httpstat = doRequest( method or "GET", fullurl, headers, body, dev )
+    D("serverRequest() doRequest returned %1,%2,%3", success, resp, httpstat)
+    if success then
+        if (resp or "") == "" then
+            -- Empty response, which is OK
+            return success, nil, 200
+        end
+        local data,pos,err = json.decode( resp )
+        if err then
+            D("serverRequest() response data could not be decoded at %1, %2 in %3", pos, err, resp)
+            return false, nil, 500
+        end
+        return true, data, httpstat
+    end
+    return success, resp, httpstat
+end
+
+-- Initialize session
+local function initSession( sess )
+    initVar( "Server", "0", sess, SESSIONSID )
+    initVar( "Offline", "1", sess, SESSIONSID )
+    initVar( "DeviceId", "", sess, SESSIONSID )
+    initVar( "DeviceName", "", sess, SESSIONSID )
+    initVar( "Client", "", sess, SESSIONSID )
+    initVar( "Version", "", sess, SESSIONSID )
+    initVar( "VolumePercent", "100", sess, SESSIONSID )
+    initVar( "Mute", "0", sess, "urn:micasaverde-com:serviceId:Volume1" )
+    initVar( "VirtualVolume", "", sess, SESSIONSID )
+    initVar( "PlayingItemId", "", sess, SESSIONSID )
+    initVar( "PlayingItemType", "", sess, SESSIONSID )
+    initVar( "CurrentStatus", "", sess, "urn:upnp-org:serviceId:AVTransport" )
+    initVar( "TransportState", "STOPPED", sess, "urn:upnp-org:serviceId:AVTransport" )
+end
+
+-- Inventory sessions using local server request
+local function inventorySessions( server )
+    local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
+    if not ok then
+        D("inventorySessions() failed session query for %1, will retry...", server)
+        luup.set_failure( true, server )
+    else
+        -- Returns array (hopefully) of sessions (as dev nums) belonging to this server.
+        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj ) 
+            D("filter(%1,%2)", dev, devobj)
+            local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
+            D("filter() ps=%1 server=%2", ps, server)
+            return ps == server
+        end )
+        D("inventorySession() cs=%1", cs)
+        -- Create map
+        local childSessions = map( cs, function( obj ) return luup.devices[obj].id end )
+        D("inventorySessions() childSessions=%1", childSessions)
+        local newSessions = {}
+        for _,sess in ipairs( data or {} ) do
+            D("inventorySessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
+            if sess.SupportsRemoteControl and sess.Client ~= "DLNA" then
+                local child = childSessions[ sess.Id ]
+                if not child then
+                    table.insert( newSessions, sess )
+                else
+                    childSessions[ sess.Id ] = nil -- remove from map
+                    initSession( child )
+                    
+                    setVar( SESSIONSID, "Offline", 0, child )
+                    setVar( SESSIONSID, "Server", server, child )
+                    setVar( SESSIONSID, "DeviceName", sess.DeviceName, child )
+                    setVar( SESSIONSID, "DeviceId", sess.DeviceId, child )
+                    setVar( SESSIONSID, "Version", sess.ApplicationVersion, child )
+                    setVar( SESSIONSID, "Client", sess.Client, child )
+                    setVar( SESSIONSID, "LastActivity", sess.LastActivityDate, child )
+                    
+                    D("inventorySessions() %1 state is %2", sess.PlayState)
+                    if sess.PlayState then
+                        setVar( SESSIONSID, "VolumePercent", sess.PlayState.VolumeLevel or "", child )
+                        setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", sess.PlayState.IsMuted and 1 or 0, child )
+                    else
+                        setVar( SESSIONSID, "VolumePercent", "", child )
+                        setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", 0, child )
+                    end
+                    
+                    if sess.NowPlayingItem then 
+                        D("inventorySessions() %1 playing %2", sess.DeviceName, sess.NowPlayingItem.Id)
+                        setVar( SESSIONSID, "PlayingItemId", sess.NowPlayingItem.Id, child )
+                        setVar( SESSIONSID, "PlayingItemType", sess.NowPlayingItem.Type, child )
+                        setVar( SESSIONSID, "PlayingItemMediaType", sess.NowPlayingItem.MediaType, child )
+                        setVar( SESSIONSID, "PlayingItemTitle", sess.NowPlayingItem.Name, child )
+                        setVar( SESSIONSID, "PlayingItemArtist", sess.NowPlayingItem.AlbumArtist, child )
+                        setVar( SESSIONSID, "PlayingItemAlbumId", sess.NowPlayingItem.AlbumId, child )
+                        setVar( SESSIONSID, "PlayingItemAlbum", sess.NowPlayingItem.Album, child )
+                        
+                        local status = sess.NowPlayingItem.Name
+                        if sess.NowPlayingItem.MediaType == "Audio" then
+                            status = status .. " (" .. (sess.NowPlayingItem.Album or "?")
+                            if ( sess.NowPlayingItem.AlbumArtist or "" ) ~= "" then
+                                status = status .. " - " .. sess.NowPlayingItem.AlbumArtist
+                            end
+                            status = status .. ")"
+                        end
+                        setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", status, child )
+                            
+                        if sess.PlayState then
+                            local ts = sess.PlayState.IsPaused and "PAUSED_PLAYBACK" or "PLAYING"
+                            setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", ts, child )
+                        end
+                    else
+                        D("inventorySessions() %1 not playing", sess.DeviceName)
+                        setVar( SESSIONSID, "PlayingItemId", "", child )
+                        setVar( SESSIONSID, "PlayingItemType", "", child )
+                        setVar( SESSIONSID, "PlayingItemMediaType", "", child )
+                        setVar( SESSIONSID, "PlayingItemTitle", "", child )
+                        setVar( SESSIONSID, "PlayingItemArtist", "", child )
+                        setVar( SESSIONSID, "PlayingItemAlbum", "", child )
+                        setVar( SESSIONSID, "PlayingItemAlbumId", "", child )
+                        setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", "", child )
+                        setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", "STOPPED", child )
+                    end
+                end
+            end
+        end
+        
+        -- Anything left in map wasn't returned by query, so assume offline.
+        for k,v in pairs( childSessions ) do
+            setVar( SESSIONSID, "Offline", 1, v )
+            setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", "(offline)", v )
+            setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", "STOPPED", v )
+        end
+        
+        -- If we have newly discovered sessions, add them as children (causes Luup restart)
+        -- ??? only at startup?
+        if #newSessions > 0 then
+            L({level=2,msg="Discovered %1 new sessions on %2 (#%3), adding and restarting..."}, #newSessions,
+                luup.devices[server].description, server)
+            local ptr = prepForNewChildren()
+            -- Create children for newly-discovered session(s)
+            for _,sess in ipairs( newSessions ) do
+                luup.chdev.append( pluginDevice, ptr, sess.Id, sess.DeviceName or sess.Id, "", 
+                    "D_EmbySession1.xml",           
+                    "", 
+                    SESSIONSID .. ",Server="..server, 
+                    false )
+            end
+            -- Finished
+            luup.chdev.sync( pluginDevice, ptr ) -- should reload
+        end
+    end
+    
+    -- Reschedule for update -- ??? TIMING FIXME?
+    scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=inventorySessions }, 30 )
+end
+
+-- One-time init for server
+local function initServer( server )
+    D("initServer(%1)", server)
+    initVar( "APIKey", "", server, SERVERSID )
+end
+
+-- Start server
+local function startServer( server )
+    D("startServer(%1)", server)
+    local apikey = luup.variable_get( SERVERSID, "APIKey", server ) or ""
+    if string.find( apikey, "^[xX]*$" ) then
+        setVar( SERVERSID, "Message", "Needs API Key!", server )
+        luup.set_failure( true, server )
+    end
+    
+    local ok, data, httpstat = serverRequest( "GET", "/System/Info", nil, nil, nil, server )
+    if not ok then
+        luup.set_failure( true, server )
+        if httpstat == 401 then
+            setVar( SERVERSID, "Message", "Can't authenticate. Check API Key.", server )
+            luup.set_failure( true, server )
+        else
+            setVar( SERVERSID, "Message", "Can't get system data (" .. tostring(httpstat) .. "), will retry later", server )
+            scheduleDelay( {id=tostring(server), info="deferstart", owner=server, func=startServer}, getVarNumeric( "RetryInterval", 300, pluginDevice, MYSID ) )
+        end
+    else
+        -- Do something...
+        setVar( SERVERSID, "ServerName", data.ServerName or "", server )
+        setVar( SERVERSID, "Version", data.Version or "", server )
+        setVar( SERVERSID, "Platform", data.OperatingSystemDisplayName or data.OperatingSystem, server )
+        setVar( SERVERSID, "OS", data.OperatingSystem, server )
+        local okmsg = string.format("Version %s on %s", data.Version or "?", data.OperatingSystem or "?")
+        local id = luup.attr_get( "altid", server )
+        if data.Id and id ~= data.Id then
+            L({level=2,msg="Emby server at %1 ID changed, was %2 now %3, repairing..."}, data.ServerName, id, data.Id)
+            setVar( SERVERSID, "Message", "ID mismatch; attempting repair.", server )
+            luup.set_failure( true, server )
+            luup.attr_set( "altid", data.Id, server )
+            luup.reload()
+            return
+        end
+        
+        luup.set_failure( false, server )
+        setVar( SERVERSID, "Message", "Taking session inventory...",server )
+        inventorySessions( server )
+        setVar( SERVERSID, "Message", okmsg, server )
+    end
+end
+
+-- Check servers
+local function startServers( dev )
+    D("startServers()")
+    local servers = getChildDevices( SERVERTYPE, dev )
+    for _,server in ipairs( servers ) do
+        luup.variable_set( SERVERSID, "Message", "Starting...", server)
+        
+        initServer( server )
+        
+        startServer( server )
+    end
+end
+
+--[[
+    D I S C O V E R Y   A N D   C O N N E C T I O N
+--]]
+
+-- Process discovery responses
+local function processDiscoveryResponses( dev )
+    if #(devData[tostring(dev)].discoveryResponses or {}) < 1 then
+        return
+    end
+    
+    for _,ndev in ipairs(devData[tostring(dev)].discoveryResponses) do
+        if not ndev.Id then
+        end
+    end
+    
+    local ptr,children = prepForNewChildren()
+    local hasNew = false
+    for _,ndev in ipairs(devData[tostring(dev)].discoveryResponses) do
+        if not seen[ndev.Id] then
+            L("Adding %1...", ndev.Name or ndev.Address)
+            luup.chdev.append( pluginDevice, ptr,
+                ndev.Id or ndev.Address, -- id (altid)
+                ndev.Name or ("Server@"..ndev.Address), -- description
+                "", -- device type
+                "D_EmbyServer1.xml", -- device file
+                "", -- impl file
+                SERVERSID .. ",LocalAddress=" .. ndev.Address, -- state vars
+                false -- embedded
+            )
+            hasNew = true
+        end
+    end
+
+    -- Close children. This will cause a Luup reload if something changed.
+    if hasNew then
+        L("New server(s) added, reload coming!")
+        gatewayStatus("New server(s) added, reloading...")
+    else
+        gatewayStatus("No new servers discovered.")
+    end
+    luup.chdev.sync( pluginDevice, ptr )
+end
+
+-- Handle discovery message
+local function handleDiscoveryMessage( response, dev )
+    local data,pos,err = json.decode( response )
+    if data == nil or err then
+        D("handleDiscoveryMessage() JSON error at %1: %2", pos, err)
+        D("handleDiscoveryMessage() ignoring unparseable response: %1", response)
+    elseif data.Address ~= nil and data.Id ~= nil and data.Name ~= nil then
+        devData[tostring(dev)].discoveryResponses = devData[tostring(dev)].discoveryResponses or {}
+        table.insert( devData[tostring(dev)].discoveryResponses, data )
+    else
+        D("handleDiscoveryMessage() ignoring non-compliant response: %1", response)
+    end
+end
+
+-- Tick for UDP discovery.
+local function udpDiscoveryTask( dev, taskid )
+    D("udpDiscoveryTask(%1,%2)", dev, taskid)
+
+    gatewayStatus( "Discovery running, found " .. #(devData[tostring(dev)].discoveryResponses) .. " so far..." )
+
+    local udp = devData[tostring(dev)].discoverySocket
+    if udp ~= nil then
+        repeat
+            udp:settimeout(1)
+            local resp, peer, port = udp:receivefrom()
+            if resp ~= nil then
+                D("udpDiscoveryTask() received response from %1:%2", peer, port)
+                if string.find( resp, "who is EmbyServer?" ) then
+                    -- Huh. There's an echo.
+                else
+                    handleDiscoveryMessage( resp, dev )
+                end
+            end
+        until resp == nil
+
+        if os.time() < devData[tostring(dev)].discoveryTime then
+            scheduleDelay( taskid, 1 )
+            return
+        else
+            scheduleTick( taskid, 0 ) -- remove task
+        end
+        udp:close()
+        devData[tostring(dev)].discoverySocket = nil
+        devData[tostring(dev)].discoveryTime = nil
+    end
+    D("udpDiscoveryTask() end of discovery")
+    processDiscoveryResponses( dev )
+end
+
+-- Launch UDP discovery.
+local function launchUDPDiscovery( dev )
+    D("launchUDPDiscovery(%1)", dev)
+    assert(dev ~= nil)
+    assert(luup.devices[dev].device_type == MYTYPE, "Discovery much be launched with gateway device")
+
+    -- Configure
+    local addr = "255.255.255.255" -- ??? FIX ME
+    local port = 7359
+    local timeout = 15
+
+    -- Any of this can fail, and it's OK.
+    local udp = socket.udp()
+    udp:setoption('broadcast', true)
+    udp:setoption('dontroute', true)
+    udp:setsockname('*', port)
+    D("launchUDPDiscovery() sending discovery request")
+    local stat,err = udp:sendto( "who is EmbyServer?", addr, port)
+    if stat == nil then
+        gatewayStatus("Discovery failed! " .. tostring(err))
+        L("Failed to send discovery req: %1", err)
+        return
+    end
+
+    devData[tostring(dev)].discoverySocket = udp
+    local now = os.time()
+    devData[tostring(dev)].discoveryTime = now + timeout
+    devData[tostring(dev)].discoveryResponses = {}
+    
+    scheduleDelay( { id="discovery-"..dev, func=udpDiscoveryTask, owner=dev }, 1 )
+    gatewayStatus( "Discovery running..." )
+end
+
+local function embyUserRequest( path, args, hh, dev, method )
+    method = method or "GET"
+    local headers = hh and shallowCopy(hh) or {}
+    headers['X-Connect-UserToken'] = luup.variable_get( MYSID, "ConnectAccessToken", dev ) or ""
+    local ea = {}
+    for k,v in pairs(args) do
+        table.insert( ea, k .. "=" .. urlencode(tostring(v)) )
+    end
+    local encargs = table.concat( ea, "&" )
+    local success, resp, httpstat = doRequest( method, "https://connect.emby.media/service" .. path .. "?" .. encargs, headers, nil, dev )
+    if success then
+        local data,pos,err = json.decode( resp )
+        if not err then
+            return true, data, 200
+        end
+        return false, nil, 500
+    end
+    return success, resp, httpstat
+end
+
+local function embyListServers( dev )
+    local success, data, httpstat = embyUserRequest( "/servers", { userId=cui }, nil, dev )
+    D("embyListServers() response data is %1", data)
+    for _,server in ipairs(data) do
+        -- See if child found with matching SystemId
+        -- If not, add to list of servers to be added
+        -- Remove from list of servers to be deleted.
+    end
+    -- If there are servers to be deleted, remove them.
+    -- If there are servers to be added, add them.
+    error("No implementation yet")
+end
+
+local function embyLogin( username, password, dev )
+    local success, response, httpStatus = doRequest( "POST", "https://connect.emby.media/service/user/authenticate", {},
+        { nameOrEmail=username or "", rawpw=password or ""}, dev )
+    if status then
+        local data,pos,err = json.decode( response )
+        if not err then
+            setVar( MYSID, "ConnectAccessToken", data.ConnectAccessToken or "", dev )
+            setvar( MYSID, "ConnectUserId", data.ConnectUserId or "", dev )
+            inventoryServers( dev )
+        else
+            gatewayStatus("Login error!")
+        end
+    else
+        gatewayStatus("Login failed!")
+    end
+end
+
 --[[ 
     ***************************************************************************
     A C T I O N   I M P L E M E N T A T I O N
     ***************************************************************************
 --]]
+
+--[[ Issue command for session. Structure is bizarre, and Emby's remote API
+     docs are wrong, incomplete, and less than useless. I would not have figured
+     out how to get this working had it not been for the genius on their team
+     who made the interactive API browser, which with a bit of fiddling, reveals
+     the secret incantations... kudos, mate, whoever you are. You da real MVP. 
+--]]
+function actionSessionGeneralCommand( pdev, actionpath, args )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local reqpath = "/Sessions/" .. sess .. "/Command" .. (actionpath or "")
+    local ok, data, httpstat = serverRequest( "POST", reqpath, nil, nil, args, server )
+    if ok then
+        scheduleDelay( tostring(server), 2 )
+    end
+end
+
+function actionSessionPlayCommand( pdev, actionpath, args )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local reqpath = "/Sessions/" .. sess .. "/Playing" .. (actionpath or "")
+    local ok, data, httpstat = serverRequest( "POST", reqpath, nil, nil, args, server )
+    if ok then
+        scheduleDelay( tostring(server), 2 )
+    end
+end
+
+function actionSessionMessage( pdev, message, title, timeout )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local reqpath = "/Sessions/" .. sess .. "/Message" .. (actionpath or "")
+    local params = { Header=title or "", Text=message or "" }
+    if (timeout or "") ~= "" then params.TimeoutMs = timeout end
+    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, args, server )
+end
+
+function actionSessionRefresh( pdev )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    scheduleDelay( tostring(server), 1 )
+end
+
+function jobEmbyLogin( pdev, username, password )
+    assert(luup.devices[pdev].device_type == MYTYPE) -- must be Emby gateway
+    if embyLogin( username, password, pdev ) then return 4,0 end
+    return 2,0
+end
+
+-- Run Emby discovery (UDP broadcast port 7359)
+function jobRunDiscovery( pdev )
+    launchUDPDiscovery( pdev )
+    return 4,0
+end
+
+function jobDiscoverIP( pdev, addr )
+    if devData[tostring(pdev)].discoverySocket then 
+        L{level=2,msg="UDP discovery running, can't do direct IP discovery"}
+        return 2,0
+    end
+    -- Clean and canonicalize
+    addr = string.gsub( string.gsub( tostring(addr or ""), "^%s+", "" ), "%s+$", "" )
+    if addr == "" then return 2,0 end
+    if not string.find( addr, "^[Hh][Tt][Tt][Pp][Ss]?://" ) then
+        addr = "http://" .. addr
+    end
+    addr = string.gsub( addr, "/+$", "" )
+    if not string.find( addr, ":(%d+)$" ) then
+        addr = addr .. ":8096"
+    end
+    L("Attempting direct IP discovery at %1", addr)
+    gatewayStatus("Contacting " .. addr)
+    local ok, resp, httpstat = doRequest( "GET", addr .. "/System/Info/Public", nil, nil, pdev )
+    if ok then
+        local data,pos,err = json.decode( resp )
+        if not err then 
+            gatewayStatus("Found " .. data.ServerName .. " (" .. data.Id .. ")")
+            devData[tostring(pdev)].discoveryResponses = { { Address=addr, Name=data.ServerName, Id=data.Id } }
+            processDiscoveryResponses( pdev )
+            return 4,0
+        else
+            L({level=2,msg="Unparsable response from %1"}, addr)
+        end
+    else
+        L({level=2,msg="Info request failed from %1 (%2)"}, addr, httpstat)
+    end
+    L{level=2,msg="Direct IP discovery failed."}
+    gatewayStatus("Direct IP discovery failed.")
+    return 2,0
+end
 
 -- Enable or disable debug
 function actionSetDebug( state, tdev )
@@ -261,6 +909,17 @@ function actionSetDebug( state, tdev )
     if debugMode then
         D("Debug enabled")
     end
+end
+
+function actionClear1( dev )
+    local ptr = luup.chdev.start( pluginDevice )
+    for k,v in pairs(luup.devices) do
+        if v.device_num_parent == pluginDevice and v.device_type == SERVERTYPE then
+            luup.chdev.append( pluginDevice, ptr, v.id, v.description, "", 
+                "D_EmbyServer1.xml", "", "", false )
+        end
+    end
+    luup.chdev.sync( pluginDevice, ptr )
 end
 
 --[[ 
@@ -278,6 +937,7 @@ local function plugin_runOnce( pdev )
     elseif s == 0 then
         L("First run, setting up new plugin instance...")
         initVar( "Message", "", pdev, MYSID )
+        initVar( "Enabled", "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
 
         luup.attr_set('category_num', 1, pdev)
@@ -318,6 +978,7 @@ function startPlugin( pdev )
     isALTUI = false
     isOpenLuup = false
     tickTasks = {}
+    devData[tostring(pdev)] = {}
     maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
     
     -- Debug?
@@ -363,12 +1024,20 @@ function startPlugin( pdev )
     plugin_runOnce( pdev )
 
     -- More inits
+    if not isEnabled( pdev ) then
+        gatewayStatus("DISABLED")
+        return true, "Disabled", _PLUGIN_NAME
+    end
     
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
     scheduleDelay( { id="master", func=masterTick, owner=pdev }, 5 )
+    
+    -- Start servers
+    startServers( pdev )
 
     -- Return success
+    gatewayStatus( nil )
     luup.set_failure( 0, pdev )
     return true, "Ready", _PLUGIN_NAME
 end
@@ -425,6 +1094,12 @@ function taskTickCallback(p)
                 nextTick = v.when
             end
         end
+    end
+    
+    -- Have we been disabled?
+    if not isEnabled( pluginDevice ) then
+        gatewayStatus("DISABLED")
+        return
     end
 
     -- Figure out next master tick, or don't resched if no tasks waiting.
@@ -490,7 +1165,7 @@ local function getEvents( deviceNum )
         return "no events: device does not exist or is not EmbySensor"
     end
     local resp = "    Events" .. EOL
-    for _,e in ipairs( ( sensorState[tostring(deviceNum)] or {}).eventList or {} ) do
+    for _,e in ipairs( ( devData[tostring(deviceNum)] or {}).eventList or {} ) do
         resp = resp .. string.format("        %15s ", os.date("%x %X", e.when or 0) )
         resp = resp .. ( e.event or "event?" ) .. ":"
         for k,v in pairs(e) do

@@ -46,7 +46,7 @@
 					"top": 1,
 					"left": 0,
 					"Display": {
-						"Top": 90,
+						"Top": 0,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24,
@@ -55,10 +55,158 @@
 					},
 					"ControlCode": "message"
 				},
+                {
+                    "ControlType": "button",
+                    "top": "2",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "cmd_emby_discovery",
+                        "text": "Run Discovery"
+                    },
+                    "Display": {
+                        "Top": 30,
+                        "Left": 0,
+                        "Width": 120,
+                        "Height": 25
+                    },
+                    "Command": {
+                        "Service": "urn:toggledbits-com:serviceId:Emby1",
+                        "Action": "RunDiscovery",
+                        "Parameters": []
+                    },
+                    "ControlCode": "run_discovery"
+                },
+                {
+                    "ControlType": "label",
+                    "top": "0.2",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "emby_ex_discovery",
+                        "text": "This form of discovery uses the Emby discovery protocol to find servers in your local network. Try this first."
+                    },
+                    "Display": {
+                        "Top": 30,
+                        "Left": 150,
+                        "Width": 480,
+                        "Height": 75
+                    }
+                },
+
+                {
+                    "ControlType": "input",
+                    "ID": "username",
+                    "Display": {
+                        "Top": 90,
+                        "Left": 0,
+                        "Width": 120,
+                        "Height": 24
+                    }
+                },{
+                    "ControlType": "input",
+                    "ID": "password",
+                    "Display": {
+                        "Top": 90,
+                        "Left": 128,
+                        "Width": 120,
+                        "Height": 24
+                    }
+                },
+                {
+                    "ControlType": "button",
+                    "top": "2",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "cmd_emby_login",
+                        "text": "Log In"
+                    },
+                    "Display": {
+                        "Top": 90,
+                        "Left": 256,
+                        "Width": 120,
+                        "Height": 25
+                    },
+                    "Command": {
+                        "Service": "urn:toggledbits-com:serviceId:Emby1",
+                        "Action": "EmbyLogin",
+                        "Parameters": [{
+                            "Name": "Username",
+                            "ID": "username"
+                        },{
+                            "Name": "Password",
+                            "ID": "password"
+                        }]
+                    },
+                    "ControlCode": "run_login"
+                },
+                {
+                    "ControlType": "label",
+                    "top": "0.2",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "emby_ex_login",
+                        "text": "Use your Emby username/password for one-time authentication. These are not stored--Emby generates an API key for me (you do not need to generate manual API keys)."
+                    },
+                    "Display": {
+                        "Top": 120,
+                        "Left": 0,
+                        "Width": 630,
+                        "Height": 48
+                    }
+                },
+
+                {
+                    "ControlType": "input",
+                    "ID": "ipaddr",
+                    "Display": {
+                        "Top": 180,
+                        "Left": 0,
+                        "Width": 120,
+                        "Height": 24
+                    }
+                },
+                {
+                    "ControlType": "button",
+                    "top": "2",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "cmd_emby_discip",
+                        "text": "Discover IP"
+                    },
+                    "Display": {
+                        "Top": 180,
+                        "Left": 150,
+                        "Width": 120,
+                        "Height": 25
+                    },
+                    "Command": {
+                        "Service": "urn:toggledbits-com:serviceId:Emby1",
+                        "Action": "DiscoverIP",
+                        "Parameters": [{
+                            "Name": "IPAddress",
+                            "ID": "ipaddr"
+                        }]
+                    },
+                    "ControlCode": "run_discip"
+                },
+                {
+                    "ControlType": "label",
+                    "top": "0.2",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "emby_ex_discip",
+                        "text": "If your server can't be located via discovery or login, and it has a fixed IP address (via a DHCP reservation or static configuration), enter its IP address here and press \"Discover IP\". You will need to manually generate and assign an API Key."
+                    },
+                    "Display": {
+                        "Top": 210,
+                        "Left": 0,
+                        "Width": 630,
+                        "Height": 48
+                    }
+                },
 				{
 					"ControlType": "label",
 					"Display": {
-						"Top": 120,
+						"Top": 240,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24

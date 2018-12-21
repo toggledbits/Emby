@@ -1,0 +1,107 @@
+{
+	"__comment": [
+		"D_EmbyServer1_UI7.json",
+		"Copyright (c) 2018 Patrick H. Rigney, All Rights Reserved"
+	],
+	"default_icon": "https://www.toggledbits.com/assets/emby/emby-plugin.png",
+	"state_icons": [],
+	"x": 2,
+	"y": 4,
+	"inScene": 1,
+	"Tabs": [{
+			"Label": {
+				"lang_tag": "tabname_control",
+				"text": "Control"
+			},
+			"Position": 0,
+			"TabType": "flash",
+			"TopNavigationTab": 1,
+			"ControlGroup": [{
+					"id": 1,
+					"scenegroup": 1
+				},
+				{
+					"id": 2,
+					"scenegroup": 2
+				}
+			],
+			"SceneGroup": [{
+					"id": 1,
+					"top": 0,
+					"left": 0,
+					"x": 1,
+					"y": 4
+				},
+				{
+					"id": 2,
+					"top": 1,
+					"left": 0,
+					"x": 1,
+					"y": 3
+				}
+			],
+			"Control": [{
+					"ControlGroup": 1,
+					"ControlType": "variable",
+					"top": 1,
+					"left": 0,
+					"Display": {
+						"Top": 0,
+						"Left": 0,
+						"Width": 320,
+						"Height": 24,
+						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
+						"Variable": "Message"
+					}
+				},{
+					"ControlType": "variable",
+					"top": 1,
+					"left": 0,
+					"Display": {
+						"Top": 30,
+						"Left": 0,
+						"Width": 320,
+						"Height": 24,
+						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
+						"Variable": "ServerName"
+					}
+				},{
+					"ControlType": "variable",
+					"top": 1,
+					"left": 0,
+					"Display": {
+						"Top": 60,
+						"Left": 0,
+						"Width": 320,
+						"Height": 24,
+						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
+						"Variable": "Version"
+					}
+				}
+			],
+			"Conditions": []
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_advanced",
+				"text": "Advanced"
+			},
+			"Position": 1,
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "advanced_device"
+		},
+		{
+			"Label": {
+				"lang_tag": "ui7_logs",
+				"text": "Logs"
+			},
+			"Position": 2,
+			"TabType": "javascript",
+			"ScriptName": "shared.js",
+			"Function": "device_logs"
+		}
+	],
+	"eventList2": [],
+	"device_type": "urn:schemas-toggledbits-com:device:Emby:1"
+}

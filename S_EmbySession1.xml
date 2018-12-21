@@ -1,0 +1,177 @@
+<?xml version="1.0"?>
+<!-- S_Reactor.xml -->
+<scpd xmlns="urn:schemas-upnp-org:service-1-0">
+    <specVersion>
+        <major>1</major>
+        <minor>0</minor>
+    </specVersion>
+    <serviceStateTable>
+        <stateVariable sendEvents="yes">
+            <name>Message</name>
+            <dataType>string</dataType>
+            <defaultValue></defaultValue>
+            <shortCode>message</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>DeviceName</name>
+            <dataType>string</dataType>
+            <defaultValue>Emby Server</defaultValue>
+            <shortCode>devicename</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>DeviceId</name>
+            <dataType>string</dataType>
+            <defaultValue>Emby Server</defaultValue>
+            <shortCode>deviceid</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>Client</name>
+            <dataType>string</dataType>
+            <defaultValue>unknown</defaultValue>
+            <shortCode>client</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>Version</name>
+            <dataType>string</dataType>
+            <defaultValue>unknown</defaultValue>
+            <shortCode>appversion</shortCode>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>LocalAddress</name>
+            <dataType>string</dataType>
+            <defaultValue></defaultValue>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>VolumePercent</name>
+            <dataType>ui1</dataType>
+            <defaultValue>100</defaultValue>
+            <allowedValueRange>
+                <minimum>0</minimum>
+                <maximum>100</maximum>
+            </allowedValueRange>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>misc_arg</name>
+            <dataType>string</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>A_ARG_TYPE_ui4</name>
+            <dataType>ui4</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>bool_arg</name>
+            <dataType>boolean</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>A_ARG_TYPE_mediatype</name>
+            <dataType>string</dataType>
+            <allowedValueList>
+                <allowedValue>Audio</AllowedValue>
+                <allowedValue>Video</AllowedValue>
+                <allowedValue>Game</AllowedValue>
+                <allowedValue>Photo</AllowedValue>
+                <allowedValue>Book</AllowedValue>
+            </allowedValueList>
+        </stateVariable>
+        <stateVariable sendEvents="no">
+            <name>A_ARG_TYPE_playcommand</name>
+            <dataType>string</dataType>
+            <defaultValue>PlayNow</defaultValue>
+            <Optional/>
+            <allowedValueList>
+                <allowedValue>PlayNow</AllowedValue>
+                <allowedValue>PlayNext</AllowedValue>
+                <allowedValue>PlayLast</AllowedValue>
+            </allowedValueList>
+        </stateVariable>
+    </serviceStateTable>
+    <actionList>
+        <action>
+            <name>PlayMedia</name>
+            <!-- Specify one of Id, Path, Title; Id may contain comma-sep list -->
+            <argumentList>
+                <argument>
+                   <name>Id</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>Path</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>Title</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>MediaType</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <name>PlayPlaylist</name>
+            <!-- Specify Id or Name; PlayCommand is optional, PlayNow (replace queue?) if not provided -->
+            <argumentList>
+                <argument>
+                   <name>Id</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>Name</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>PlayCommand</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>A_ARG_TYPE_playcommand</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <!-- Toggle pause state -->
+            <name>PlayPause</name>
+        </action>
+        <action>
+            <!-- Refresh data from server -->
+            <name>Refresh</name>
+        </action>
+        <action>
+            <!-- Set volume 0-100 -->
+            <name>SetVolume</name>
+            <argumentList>
+                <argument>
+                   <name>Volume</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>VolumePercent</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <!-- Display message on client -->
+            <name>Message</name>
+            <argumentList>
+                <argument>
+                   <name>Text</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>Header</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>TimeoutMs</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+    </actionList>
+</scpd>

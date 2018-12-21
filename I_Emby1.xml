@@ -23,5 +23,153 @@
     </functions>
     <startup>startupEmbyPlugin</startup>
     <actionList>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
+            <name>RunDiscovery</name>
+            <job>
+                EmbyPlugin.jobRunDiscovery( lul_device )
+                return 4,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
+            <name>EmbyLogin</name>
+            <job>
+                return EmbyPlugin.jobEmbyLogin( lul_device, lul_settings.Username, lul_settings.Password )
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
+            <name>DiscoverIP</name>
+            <job>
+                EmbyPlugin.jobDiscoverIP( lul_device, lul_settings.IPAddress )
+                return 4,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
+            <name>Clear1</name>
+            <run>
+                EmbyPlugin.actionClear1( lul_device )
+            </run>
+        </action>
+        
+        <!-- ACTIONS FOR SESSIONS -->
+        
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>PlayPause</name>
+            <run>
+                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/PlayPause" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>SetVolume</name>
+            <run>
+                -- See comments in implementation of actionSessionGeneralCommand
+                return EmbyPlugin.actionSessionGeneralCommand( lul_device, nil, 
+                    { Name="SetVolume", Arguments={ Volume=tostring(lul_settings.Volume or 100) } } )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>Message</name>
+            <run>
+                return EmbyPlugin.actionSessionMessage( lul_device, lul_settings.Text, lul_settings.Header, lul_settings.TimeoutMs )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>Refresh</name>
+            <run>
+                return EmbyPlugin.actionSessionRefresh( lul_device )
+            </run>
+        </action>
+
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>Play</name>
+            <run>
+                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/Unpause" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>Pause</name>
+            <run>
+                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/Pause" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>Stop</name>
+            <run>
+                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/Stop" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>SkipDown</name>
+            <run>
+                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/NextTrack" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>SkipUp</name>
+            <run>
+                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/PreviousTrack" )
+            </run>
+        </action>
+        
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
+            <name>Up</name>
+            <run>
+                local em = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VirtualVolume", lul_device ) or ""
+                if em ~= "" then
+                    em = tonumber(em) or 0
+                    if em &gt; 0 then
+                        local cv = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VolumePercent", lul_device )
+                        cv = (tonumber(cv) or 0) + em
+                        if cv &gt; 100 then cv = 100 end
+                        -- See SetVolume above
+                        return EmbyPlugin.actionSessionGeneralCommand( lul_device, nil, 
+                            { Name="SetVolume", Arguments={ Volume=tostring(cv) } } )
+                    end
+                end
+                -- Use native up
+                return EmbyPlugin.actionSessionGeneralCommand( lul_device, "/VolumeUp" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
+            <name>Down</name>
+            <run>
+                local em = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VirtualVolume", lul_device ) or ""
+                if em ~= "" then
+                    em = tonumber(em) or 0
+                    if em &gt; 0 then
+                        local cv = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VolumePercent", lul_device )
+                        cv = (tonumber(cv) or 0) - em
+                        if cv &lt; em then cv = em end
+                        -- See SetVolume above
+                        return EmbyPlugin.actionSessionGeneralCommand( lul_device, nil, 
+                            { Name="SetVolume", Arguments={ Volume=tostring(cv) } } )
+                    end
+                end
+                -- Use native down
+                return EmbyPlugin.actionSessionGeneralCommand( lul_device, "/VolumeDown" )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
+            <name>Mute</name>
+            <job>
+                return EmbyPlugin.actionSessionGeneralCommand( lul_device, "/ToggleMute" )
+            </job>
+        </action>
+
     </actionList>
 </implementation>
