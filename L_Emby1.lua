@@ -103,7 +103,7 @@ end
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
     if isOpenLuup then
-        return true
+        return false
     end
     if luup.version_branch == 1 and luup.version_major == 7 then
         if ui7Check == "" then
