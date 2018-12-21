@@ -33,13 +33,6 @@
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
-            <name>EmbyLogin</name>
-            <job>
-                return EmbyPlugin.jobEmbyLogin( lul_device, lul_settings.Username, lul_settings.Password )
-            </job>
-        </action>
-        <action>
-            <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
             <name>DiscoverIP</name>
             <job>
                 EmbyPlugin.jobDiscoverIP( lul_device, lul_settings.IPAddress )
@@ -52,6 +45,24 @@
             <run>
                 EmbyPlugin.actionClear1( lul_device )
             </run>
+        </action>
+
+        <!-- ACTIONS FOR SERVERS -->
+
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbyServer1</serviceId>
+            <name>Authenticate</name>
+            <job>
+                if (lul_settings.APIKey or "") ~= "" then
+                    luup.variable_set( "urn:toggledbits-com:serviceId:EmbyServer1", "UserId", "", lul_device )
+                    luup.variable_set( "urn:toggledbits-com:serviceId:EmbyServer1", "APIKey", lul_settings.APIKey, lul_device )
+                    return 4,0
+                end
+                if EmbyPlugin.actionServerLogin( lul_device, lul_settings.Username or "", lul_settings.Password or "") then
+                    return 4,0
+                end
+                return 2,0
+            </job>
         </action>
         
         <!-- ACTIONS FOR SESSIONS -->
@@ -112,14 +123,14 @@
             <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
             <name>SkipDown</name>
             <run>
-                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/NextTrack" )
+                return EmbyPlugin.actionSessionSmartSkip( lul_device, false )
             </run>
         </action>
         <action>
             <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
             <name>SkipUp</name>
             <run>
-                return EmbyPlugin.actionSessionPlayCommand( lul_device, "/PreviousTrack" )
+                return EmbyPlugin.actionSessionSmartSkip( lul_device, true )
             </run>
         </action>
         
@@ -127,7 +138,7 @@
             <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
             <name>Up</name>
             <run>
-                local em = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VirtualVolume", lul_device ) or ""
+                local em = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "SmartVolume", lul_device ) or ""
                 if em ~= "" then
                     em = tonumber(em) or 0
                     if em &gt; 0 then
@@ -147,7 +158,7 @@
             <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
             <name>Down</name>
             <run>
-                local em = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VirtualVolume", lul_device ) or ""
+                local em = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "SmartVolume", lul_device ) or ""
                 if em ~= "" then
                     em = tonumber(em) or 0
                     if em &gt; 0 then
@@ -166,9 +177,9 @@
         <action>
             <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
             <name>Mute</name>
-            <job>
+            <run>
                 return EmbyPlugin.actionSessionGeneralCommand( lul_device, "/ToggleMute" )
-            </job>
+            </run>
         </action>
 
     </actionList>

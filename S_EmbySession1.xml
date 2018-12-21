@@ -66,11 +66,11 @@
             <name>A_ARG_TYPE_mediatype</name>
             <dataType>string</dataType>
             <allowedValueList>
-                <allowedValue>Audio</AllowedValue>
-                <allowedValue>Video</AllowedValue>
-                <allowedValue>Game</AllowedValue>
-                <allowedValue>Photo</AllowedValue>
-                <allowedValue>Book</AllowedValue>
+                <allowedValue>Audio</allowedValue>
+                <allowedValue>Video</allowedValue>
+                <allowedValue>Game</allowedValue>
+                <allowedValue>Photo</allowedValue>
+                <allowedValue>Book</allowedValue>
             </allowedValueList>
         </stateVariable>
         <stateVariable sendEvents="no">
@@ -79,9 +79,9 @@
             <defaultValue>PlayNow</defaultValue>
             <Optional/>
             <allowedValueList>
-                <allowedValue>PlayNow</AllowedValue>
-                <allowedValue>PlayNext</AllowedValue>
-                <allowedValue>PlayLast</AllowedValue>
+                <allowedValue>PlayNow</allowedValue>
+                <allowedValue>PlayNext</allowedValue>
+                <allowedValue>PlayLast</allowedValue>
             </allowedValueList>
         </stateVariable>
     </serviceStateTable>

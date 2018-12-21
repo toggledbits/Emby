@@ -56,13 +56,35 @@
 						"Variable": "TransportState",
 						"Value": "PAUSED_PLAYBACK",
 						"Top": 30,
-						"Left": 90,
+						"Left": 30,
 						"Width": 50,
 						"Height": 20
 					},
 					"Command": {
 						"Service": "urn:toggledbits-com:serviceId:EmbySession1",
 						"Action": "PlayPause",
+						"Parameters": []
+					}
+				},{
+					"ControlType": "button",
+					"top": 0,
+					"left": 1,
+					"Label": {
+						"lang_tag": "cmd_stop",
+						"text": "Stop"
+					},
+					"Display": {
+						"Service": "urn:upnp-org:serviceId:AVTransport",
+						"Variable": "TransportState",
+						"Value": "STOPPED",
+						"Top": 30,
+						"Left": 90,
+						"Width": 50,
+						"Height": 20
+					},
+					"Command": {
+						"Service": "urn:micasaverde-com:serviceId:MediaNavigation1",
+						"Action": "Stop",
 						"Parameters": []
 					}
 				},{
@@ -204,8 +226,7 @@
 						"Width": 80,
 						"Height": 20
 					}
-				},
-				{
+				},{
 					"ControlGroup": 1,
 					"ControlPair": 1,
 					"ControlHeader": 1,
@@ -223,35 +244,36 @@
 						"Width": 300,
 						"Height": 60
 					}
+				},{
+					"ControlGroup": 1,
+					"ControlType": "line_break"
+				},{
+					"ControlGroup": 1,
+					"ControlPair": 1,
+					"ControlHeader": 1,
+					"ControlType": "variable",
+					"top": 0,
+					"left": 0,
+					"x": 3,
+					"y": 1,
+					"text_align": "left",
+					"Display": {
+						"Service": "urn:toggledbits-com:serviceId:EmbySession1",
+						"Variable": "DisplayPosition",
+						"Top": 130,
+						"Left": 110,
+						"Width": 300,
+						"Height": 60
+					}
 				}
 			]
-		},
-		{
-			"Label": {
-				"lang_tag": "tabname_player",
-				"text": "Player"
-			},
-			"Position": 1,
-			"TabType": "javascript",
-			"ScriptName": "J_EmbySession1.js",
-			"Function": "EmbySession.showEmbyPlayer"
-		},
-		{
-			"Label": {
-				"lang_tag": "tabname_tts",
-				"text": "TTS"
-			},
-			"Position": 2,
-			"TabType": "javascript",
-			"ScriptName": "J_EmbySession1.js",
-			"Function": "EmbySession.showTTS"
 		},
 		{
 			"Label": {
 				"lang_tag": "advanced",
 				"text": "Advanced"
 			},
-			"Position": 3,
+			"Position": 1,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "advanced_device"

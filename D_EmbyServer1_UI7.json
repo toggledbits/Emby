@@ -53,12 +53,76 @@
 						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
 						"Variable": "Message"
 					}
+				},
+				
+				{
+					"ControlType": "input",
+					"ID": "username",
+					"Display": {
+						"Top": 30,
+						"Left": 0,
+						"Width": 120,
+						"Height": 24
+					}
 				},{
+					"ControlType": "input",
+					"ID": "password",
+					"Display": {
+						"Top": 30,
+						"Left": 128,
+						"Width": 120,
+						"Height": 24
+					}
+				},
+				{
+					"ControlType": "button",
+					"top": "2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "cmd_emby_login",
+						"text": "Log In"
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 256,
+						"Width": 120,
+						"Height": 25
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
+						"Action": "Authenticate",
+						"Parameters": [{
+							"Name": "Username",
+							"ID": "username"
+						},{
+							"Name": "Password",
+							"ID": "password"
+						}]
+					},
+					"ControlCode": "run_login"
+				},
+				{
+					"ControlType": "label",
+					"top": "0.2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "emby_ex_login",
+						"text": "Use your Emby username/password for one-time authentication. These are not stored--Emby generates an API key for me (you do not need to generate manual API keys)."
+					},
+					"Display": {
+						"Top": 60,
+						"Left": 0,
+						"Width": 630,
+						"Height": 48
+					}
+				},
+
+				{
 					"ControlType": "variable",
 					"top": 1,
 					"left": 0,
 					"Display": {
-						"Top": 30,
+						"Top": 120,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24,
@@ -70,7 +134,7 @@
 					"top": 1,
 					"left": 0,
 					"Display": {
-						"Top": 60,
+						"Top": 150,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24,

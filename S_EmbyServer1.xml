@@ -42,5 +42,25 @@
         </stateVariable>
     </serviceStateTable>
     <actionList>
+        <action>
+            <name>Authenticate</name>
+            <argumentList>
+                <argument>
+                   <name>Username</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>Password</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>APIKey</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
     </actionList>
 </scpd>

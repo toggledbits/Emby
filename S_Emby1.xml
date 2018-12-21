@@ -33,21 +33,6 @@
             </argumentList>
         </action>
         <action>
-            <name>EmbyLogin</name>
-            <argumentList>
-                <argument>
-                   <name>Username</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>Password</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
             <name>DiscoverIP</name>
             <argumentList>
                 <argument>

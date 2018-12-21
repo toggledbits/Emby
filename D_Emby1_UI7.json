@@ -94,71 +94,9 @@
 
                 {
                     "ControlType": "input",
-                    "ID": "username",
-                    "Display": {
-                        "Top": 90,
-                        "Left": 0,
-                        "Width": 120,
-                        "Height": 24
-                    }
-                },{
-                    "ControlType": "input",
-                    "ID": "password",
-                    "Display": {
-                        "Top": 90,
-                        "Left": 128,
-                        "Width": 120,
-                        "Height": 24
-                    }
-                },
-                {
-                    "ControlType": "button",
-                    "top": "2",
-                    "left": "0",
-                    "Label": {
-                        "lang_tag": "cmd_emby_login",
-                        "text": "Log In"
-                    },
-                    "Display": {
-                        "Top": 90,
-                        "Left": 256,
-                        "Width": 120,
-                        "Height": 25
-                    },
-                    "Command": {
-                        "Service": "urn:toggledbits-com:serviceId:Emby1",
-                        "Action": "EmbyLogin",
-                        "Parameters": [{
-                            "Name": "Username",
-                            "ID": "username"
-                        },{
-                            "Name": "Password",
-                            "ID": "password"
-                        }]
-                    },
-                    "ControlCode": "run_login"
-                },
-                {
-                    "ControlType": "label",
-                    "top": "0.2",
-                    "left": "0",
-                    "Label": {
-                        "lang_tag": "emby_ex_login",
-                        "text": "Use your Emby username/password for one-time authentication. These are not stored--Emby generates an API key for me (you do not need to generate manual API keys)."
-                    },
-                    "Display": {
-                        "Top": 120,
-                        "Left": 0,
-                        "Width": 630,
-                        "Height": 48
-                    }
-                },
-
-                {
-                    "ControlType": "input",
                     "ID": "ipaddr",
                     "Display": {
-                        "Top": 180,
+                        "Top": 90,
                         "Left": 0,
                         "Width": 120,
                         "Height": 24
@@ -173,7 +111,7 @@
                         "text": "Discover IP"
                     },
                     "Display": {
-                        "Top": 180,
+                        "Top": 90,
                         "Left": 150,
                         "Width": 120,
                         "Height": 25
@@ -197,7 +135,7 @@
                         "text": "If your server can't be located via discovery or login, and it has a fixed IP address (via a DHCP reservation or static configuration), enter its IP address here and press \"Discover IP\". You will need to manually generate and assign an API Key."
                     },
                     "Display": {
-                        "Top": 210,
+                        "Top": 120,
                         "Left": 0,
                         "Width": 630,
                         "Height": 48
@@ -206,14 +144,27 @@
 				{
 					"ControlType": "label",
 					"Display": {
-						"Top": 240,
+						"Top": 210,
+						"Left": 0,
+						"Width": 320,
+						"Height": 24
+					},
+					"Label": {
+						"lang_tag": "tb_begging",
+						"text": "<b>Please consider <a href=\"https://www.toggledbits.com/donate\" target=\"_blank\">making a donation</a> to support the ongoing development of this plugin.</b>"
+					}
+				},
+				{
+					"ControlType": "label",
+					"Display": {
+						"Top": 270,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24
 					},
 					"Label": {
 						"lang_tag": "tb_emby_about",
-						"text": "Emby ver 0.1develop-181219 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"#\" target=\"_blank\">Forum board</a> &#149; <a href=\"http://www.toggledbits.com/emby\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Emby&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
+						"text": "Emby ver 0.1develop-181219 &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"#\" target=\"_blank\">Support Forum Thread</a> &#149; <a href=\"http://www.toggledbits.com/emby\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Emby&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
 					}
 				}
 			],

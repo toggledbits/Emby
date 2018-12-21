@@ -11,11 +11,9 @@ local debugMode = true
 
 local _PLUGIN_ID = 99999
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "0.1-181219"
+local _PLUGIN_VERSION = "0.1-181221"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
 local _CONFIGVERSION = 000000
-
-local APIKEY = "a2d9644ff03b4c6883744c12e801ba2a" -- ??? TEMPORARY
 
 local math = require("math")
 local string = require("string")
@@ -41,7 +39,7 @@ local pluginDevice = 0
 local isALTUI = false
 local isOpenLuup = false
 
-local json = require("dkjson")
+local DISCOVERYPERIOD = 15
 
 local function dump(t, seen)
     if t == nil then return "nil" end
@@ -104,7 +102,7 @@ end
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
-    if isOpenLuup then 
+    if isOpenLuup then
         return true
     end
     if luup.version_branch == 1 and luup.version_major == 7 then
@@ -210,7 +208,7 @@ local function addEvent( t )
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
     local dev = p.dev or pluginDevice
-    devData[tostring(dev)] = devData[tostring(dev)] or { eventList={} }
+    devData[tostring(dev)].eventList = devData[tostring(dev)].eventList or { }
     table.insert( devData[tostring(dev)].eventList, p )
     if #devData[tostring(dev)].eventList > maxEvents then table.remove(devData[tostring(dev)].eventList, 1) end
 end
@@ -299,7 +297,7 @@ end
      table (array) should contain device IDs of existing children that will be
      preserved. Any existing child not listed will be dropped. If the table is nil,
      all existing children in luup.devices will be preserved.
---]]     
+--]]
 local function prepForNewChildren( existingChildren )
     D("prepForNewChildren(%1)", existingChildren)
     local dfMap = { [SERVERTYPE]="D_EmbyServer1.xml", [SESSIONTYPE]="D_EmbySession1.xml" }
@@ -317,9 +315,9 @@ local function prepForNewChildren( existingChildren )
         local v = luup.devices[k]
         assert(v)
         assert(v.device_num_parent == pluginDevice)
-        D("adding child %1 (%2/%3)", v.description, k, v.id)
-        luup.chdev.append( pluginDevice, ptr, v.id, v.description, "", 
-            dfMap[v.device_type] or error("Invalid device type in child "..k), 
+        D("prepForNewChildren() appending existing child %1 (%2/%3)", v.description, k, v.id)
+        luup.chdev.append( pluginDevice, ptr, v.id, v.description, "",
+            dfMap[v.device_type] or error("Invalid device type in child "..k),
             "", "", false )
     end
     return ptr, existingChildren
@@ -329,7 +327,7 @@ local function doRequest(method, url, tHeaders, body, dev)
     D("doRequest(%1,%2,%3,%4,%5)", method, url, tHeaders, body, dev)
     assert(dev ~= nil)
     method = method or "GET"
-    
+
     local headers = tHeaders and shallowCopy(tHeaders) or {}
     if headers['X-Application'] == nil then headers['X-Application'] = "ToggledBits-Vera-Emby/" .. _PLUGIN_VERSION end
 
@@ -347,8 +345,8 @@ local function doRequest(method, url, tHeaders, body, dev)
         -- Caller should set Content-Type
     end
     headers["Content-Length"] = string.len(body or "")
-    if body ~= nil then 
-        src = ltn12.source.string(body) 
+    if body ~= nil then
+        src = ltn12.source.string(body)
     end
 
     --[[
@@ -406,7 +404,9 @@ local function serverRequest( method, path, params, headers, body, dev )
         table.insert( ea, k .. "=" .. urlencode(tostring(v)) )
     end
     if not (params and params.api_key) then
-        table.insert( ea, "api_key=" .. urlencode(luup.variable_get( SERVERSID, "APIKey", dev ) or "") )
+        local key = luup.variable_get( SERVERSID, "APIKey", dev ) or ""
+        if key:find("^[xX]*$") then return false, nil, 401 end
+        table.insert( ea, "api_key=" .. urlencode(key) )
     end
     local fullurl = luup.variable_get( SERVERSID, "LocalAddress", dev ) or "http://localhost:8096"
     fullurl = fullurl .. "/" .. path .. "?" .. table.concat( ea, "&" )
@@ -437,11 +437,112 @@ local function initSession( sess )
     initVar( "Version", "", sess, SESSIONSID )
     initVar( "VolumePercent", "100", sess, SESSIONSID )
     initVar( "Mute", "0", sess, "urn:micasaverde-com:serviceId:Volume1" )
-    initVar( "VirtualVolume", "", sess, SESSIONSID )
+    initVar( "SmartVolume", "", sess, SESSIONSID )
     initVar( "PlayingItemId", "", sess, SESSIONSID )
     initVar( "PlayingItemType", "", sess, SESSIONSID )
     initVar( "CurrentStatus", "", sess, "urn:upnp-org:serviceId:AVTransport" )
     initVar( "TransportState", "STOPPED", sess, "urn:upnp-org:serviceId:AVTransport" )
+    initVar( "SmartSkipDefault", "", sess, SESSIONSID )
+    initVar( "SmartSkipGrace", "", sess, SESSIONSID )
+end
+
+local function clearPlayingState( child )
+    setVar( SESSIONSID, "PlayingItemId", "", child )
+    setVar( SESSIONSID, "PlayingItemType", "", child )
+    setVar( SESSIONSID, "PlayingItemMediaType", "", child )
+    setVar( SESSIONSID, "PlayingItemTitle", "", child )
+    setVar( SESSIONSID, "PlayingItemArtist", "", child )
+    setVar( SESSIONSID, "PlayingItemAlbum", "", child )
+    setVar( SESSIONSID, "PlayingItemAlbumId", "", child )
+    setVar( SESSIONSID, "PlayingItemPosition", "0", child )
+    setVar( SESSIONSID, "PlayingItemRuntime", "0", child )
+    setVar( SESSIONSID, "PlayingItemChapters", "", child )
+    setVar( SESSIONSID, "DisplayPosition", "--:-- / --:--", child )
+    setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", "", child )
+    setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", "STOPPED", child )
+end
+
+local function updateSessions( server, taskid )
+    local anyPlaying = false
+    local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
+    if not ok then
+        D("updateSessions() failed session query for %1, will retry...", server)
+        luup.set_failure( true, server )
+        -- fall through will reschedule on no-playing delay
+    else
+        for _,sess in ipairs( data or {} ) do
+            D("updateSessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
+            local child = findChildById( sess.Id )
+            if child then
+luup.log(json.encode(sess),2)
+                setVar( SESSIONSID, "Offline", 0, child )
+                setVar( SESSIONSID, "Server", server, child )
+                setVar( SESSIONSID, "DeviceName", sess.DeviceName, child )
+                setVar( SESSIONSID, "DeviceId", sess.DeviceId, child )
+                setVar( SESSIONSID, "Version", sess.ApplicationVersion, child )
+                setVar( SESSIONSID, "Client", sess.Client, child )
+                setVar( SESSIONSID, "LastActivity", sess.LastActivityDate, child )
+
+                D("updateSessions() %1 state is %2", sess.PlayState)
+                if sess.PlayState then
+                    setVar( SESSIONSID, "VolumePercent", sess.PlayState.VolumeLevel or "", child )
+                    setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", sess.PlayState.IsMuted and 1 or 0, child )
+                else
+                    setVar( SESSIONSID, "VolumePercent", "", child )
+                    setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", 0, child )
+                end
+
+                if sess.NowPlayingItem then
+                    D("updateSessions() %1 playing %2", sess.DeviceName, sess.NowPlayingItem.Id)
+                    anyPlaying = true
+                    setVar( SESSIONSID, "PlayingItemId", sess.NowPlayingItem.Id, child )
+                    setVar( SESSIONSID, "PlayingItemType", sess.NowPlayingItem.Type, child )
+                    setVar( SESSIONSID, "PlayingItemMediaType", sess.NowPlayingItem.MediaType, child )
+                    setVar( SESSIONSID, "PlayingItemTitle", sess.NowPlayingItem.Name, child )
+                    setVar( SESSIONSID, "PlayingItemArtist", sess.NowPlayingItem.AlbumArtist, child )
+                    setVar( SESSIONSID, "PlayingItemAlbumId", sess.NowPlayingItem.AlbumId, child )
+                    setVar( SESSIONSID, "PlayingItemAlbum", sess.NowPlayingItem.Album, child )
+
+                    local status = sess.NowPlayingItem.Name
+                    if sess.NowPlayingItem.MediaType == "Audio" then
+                        status = status .. " (" .. (sess.NowPlayingItem.Album or "?")
+                        if ( sess.NowPlayingItem.AlbumArtist or "" ) ~= "" then
+                            status = status .. " - " .. sess.NowPlayingItem.AlbumArtist
+                        end
+                        status = status .. ")"
+                    end
+                    setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", status, child )
+
+                    local runtime = math.floor( (sess.NowPlayingItem.RunTimeTicks or 0) / 10000 ) / 1000 -- frac seconds
+                    setVar( SESSIONSID, "PlayingItemRuntime", runtime, child )
+
+                    -- For video media, store any chapter data for "SmartSkip"
+                    if (sess.NowPlayingItem.MediaType or ""):lower() == "video" and #(sess.NowPlayingItem.Chapters or {}) > 0 then
+                        setVar( SESSIONSID, "PlayingItemChapters", json.encode( sess.NowPlayingItem.Chapters ), child )
+                    else
+                        setVar( SESSIONSID, "PlayingItemChapters", "", child )
+                    end
+
+                    if sess.PlayState then
+                        local ts = sess.PlayState.IsPaused and "PAUSED_PLAYBACK" or "PLAYING"
+                        setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", ts, child )
+                        local pos = math.floor( (sess.PlayState.PositionTicks or 0) / 10000 ) / 1000
+                        setVar( SESSIONSID, "PlayingItemPosition", pos, child )
+                        local dp = string.format( "%02d:%02d / %02d:%02d", math.floor( pos / 60 ), math.floor( pos ) % 60,
+                            math.floor( runtime / 60 ), math.floor( runtime ) % 60 )
+                        setVar( SESSIONSID, "DisplayPosition", dp, child )
+                    end
+                else
+                    D("updateSessions() %1 not playing", sess.DeviceName)
+                    clearPlayingState( child )
+                end
+            end
+        end
+    end
+
+    -- Reschedule for update -- ??? TIMING FIXME?
+    local delay = getVarNumeric( anyPlaying and "SessionUpdateIntervalPlaying" or "SessionUpdateIntervalIdle", anyPlaying and 5 or 30, server, SERVERSID )
+    scheduleDelay( taskid, delay )
 end
 
 -- Inventory sessions using local server request
@@ -452,13 +553,10 @@ local function inventorySessions( server )
         luup.set_failure( true, server )
     else
         -- Returns array (hopefully) of sessions (as dev nums) belonging to this server.
-        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj ) 
-            D("filter(%1,%2)", dev, devobj)
+        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj )
             local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
-            D("filter() ps=%1 server=%2", ps, server)
             return ps == server
         end )
-        D("inventorySession() cs=%1", cs)
         -- Create map
         local childSessions = map( cs, function( obj ) return luup.devices[obj].id end )
         D("inventorySessions() childSessions=%1", childSessions)
@@ -472,60 +570,6 @@ local function inventorySessions( server )
                 else
                     childSessions[ sess.Id ] = nil -- remove from map
                     initSession( child )
-                    
-                    setVar( SESSIONSID, "Offline", 0, child )
-                    setVar( SESSIONSID, "Server", server, child )
-                    setVar( SESSIONSID, "DeviceName", sess.DeviceName, child )
-                    setVar( SESSIONSID, "DeviceId", sess.DeviceId, child )
-                    setVar( SESSIONSID, "Version", sess.ApplicationVersion, child )
-                    setVar( SESSIONSID, "Client", sess.Client, child )
-                    setVar( SESSIONSID, "LastActivity", sess.LastActivityDate, child )
-                    
-                    D("inventorySessions() %1 state is %2", sess.PlayState)
-                    if sess.PlayState then
-                        setVar( SESSIONSID, "VolumePercent", sess.PlayState.VolumeLevel or "", child )
-                        setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", sess.PlayState.IsMuted and 1 or 0, child )
-                    else
-                        setVar( SESSIONSID, "VolumePercent", "", child )
-                        setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", 0, child )
-                    end
-                    
-                    if sess.NowPlayingItem then 
-                        D("inventorySessions() %1 playing %2", sess.DeviceName, sess.NowPlayingItem.Id)
-                        setVar( SESSIONSID, "PlayingItemId", sess.NowPlayingItem.Id, child )
-                        setVar( SESSIONSID, "PlayingItemType", sess.NowPlayingItem.Type, child )
-                        setVar( SESSIONSID, "PlayingItemMediaType", sess.NowPlayingItem.MediaType, child )
-                        setVar( SESSIONSID, "PlayingItemTitle", sess.NowPlayingItem.Name, child )
-                        setVar( SESSIONSID, "PlayingItemArtist", sess.NowPlayingItem.AlbumArtist, child )
-                        setVar( SESSIONSID, "PlayingItemAlbumId", sess.NowPlayingItem.AlbumId, child )
-                        setVar( SESSIONSID, "PlayingItemAlbum", sess.NowPlayingItem.Album, child )
-                        
-                        local status = sess.NowPlayingItem.Name
-                        if sess.NowPlayingItem.MediaType == "Audio" then
-                            status = status .. " (" .. (sess.NowPlayingItem.Album or "?")
-                            if ( sess.NowPlayingItem.AlbumArtist or "" ) ~= "" then
-                                status = status .. " - " .. sess.NowPlayingItem.AlbumArtist
-                            end
-                            status = status .. ")"
-                        end
-                        setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", status, child )
-                            
-                        if sess.PlayState then
-                            local ts = sess.PlayState.IsPaused and "PAUSED_PLAYBACK" or "PLAYING"
-                            setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", ts, child )
-                        end
-                    else
-                        D("inventorySessions() %1 not playing", sess.DeviceName)
-                        setVar( SESSIONSID, "PlayingItemId", "", child )
-                        setVar( SESSIONSID, "PlayingItemType", "", child )
-                        setVar( SESSIONSID, "PlayingItemMediaType", "", child )
-                        setVar( SESSIONSID, "PlayingItemTitle", "", child )
-                        setVar( SESSIONSID, "PlayingItemArtist", "", child )
-                        setVar( SESSIONSID, "PlayingItemAlbum", "", child )
-                        setVar( SESSIONSID, "PlayingItemAlbumId", "", child )
-                        setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", "", child )
-                        setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", "STOPPED", child )
-                    end
                 end
             end
         end
@@ -533,10 +577,9 @@ local function inventorySessions( server )
         -- Anything left in map wasn't returned by query, so assume offline.
         for k,v in pairs( childSessions ) do
             setVar( SESSIONSID, "Offline", 1, v )
-            setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", "(offline)", v )
-            setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", "STOPPED", v )
+            clearPlayingState( v )
         end
-        
+
         -- If we have newly discovered sessions, add them as children (causes Luup restart)
         -- ??? only at startup?
         if #newSessions > 0 then
@@ -545,25 +588,30 @@ local function inventorySessions( server )
             local ptr = prepForNewChildren()
             -- Create children for newly-discovered session(s)
             for _,sess in ipairs( newSessions ) do
-                luup.chdev.append( pluginDevice, ptr, sess.Id, sess.DeviceName or sess.Id, "", 
-                    "D_EmbySession1.xml",           
-                    "", 
-                    SESSIONSID .. ",Server="..server, 
+                luup.chdev.append( pluginDevice, ptr, sess.Id, sess.DeviceName or sess.Id, "",
+                    "D_EmbySession1.xml",
+                    "",
+                    SESSIONSID .. ",Server="..server,
                     false )
             end
             -- Finished
             luup.chdev.sync( pluginDevice, ptr ) -- should reload
         end
     end
-    
+
     -- Reschedule for update -- ??? TIMING FIXME?
-    scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=inventorySessions }, 30 )
+    scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 2 )
 end
 
 -- One-time init for server
 local function initServer( server )
     D("initServer(%1)", server)
     initVar( "APIKey", "", server, SERVERSID )
+    initVar( "UserId", "", server, SERVERSID )
+    initVar( "SessionUpdateIntervalIdle", "", server, SERVERSID )
+    initVar( "SessionUpdateIntervalPlaying", "", server, SERVERSID )
+    initVar( "SmartSkipDefault", "", server, SERVERSID )
+    initVar( "SmartSkipGrace", "", server, SERVERSID )
 end
 
 -- Start server
@@ -571,10 +619,11 @@ local function startServer( server )
     D("startServer(%1)", server)
     local apikey = luup.variable_get( SERVERSID, "APIKey", server ) or ""
     if string.find( apikey, "^[xX]*$" ) then
-        setVar( SERVERSID, "Message", "Needs API Key!", server )
+        setVar( SERVERSID, "Message", "Please log in.", server )
         luup.set_failure( true, server )
+        return
     end
-    
+
     local ok, data, httpstat = serverRequest( "GET", "/System/Info", nil, nil, nil, server )
     if not ok then
         luup.set_failure( true, server )
@@ -601,7 +650,7 @@ local function startServer( server )
             luup.reload()
             return
         end
-        
+
         luup.set_failure( false, server )
         setVar( SERVERSID, "Message", "Taking session inventory...",server )
         inventorySessions( server )
@@ -615,9 +664,9 @@ local function startServers( dev )
     local servers = getChildDevices( SERVERTYPE, dev )
     for _,server in ipairs( servers ) do
         luup.variable_set( SERVERSID, "Message", "Starting...", server)
-        
+
         initServer( server )
-        
+
         startServer( server )
     end
 end
@@ -631,13 +680,14 @@ local function processDiscoveryResponses( dev )
     if #(devData[tostring(dev)].discoveryResponses or {}) < 1 then
         return
     end
-    
+
     for _,ndev in ipairs(devData[tostring(dev)].discoveryResponses) do
         if not ndev.Id then
         end
     end
-    
-    local ptr,children = prepForNewChildren()
+
+    local ptr,existing = prepForNewChildren()
+    local seen = map( existing, function( n ) return luup.devices[n].id end )
     local hasNew = false
     for _,ndev in ipairs(devData[tostring(dev)].discoveryResponses) do
         if not seen[ndev.Id] then
@@ -683,7 +733,9 @@ end
 local function udpDiscoveryTask( dev, taskid )
     D("udpDiscoveryTask(%1,%2)", dev, taskid)
 
-    gatewayStatus( "Discovery running, found " .. #(devData[tostring(dev)].discoveryResponses) .. " so far..." )
+    local rem = math.max( 0, devData[tostring(dev)].discoveryTime - os.time() )
+    gatewayStatus( string.format( "Discovery running, found %d so far (%d%%)...", 
+        #(devData[tostring(dev)].discoveryResponses), math.floor((DISCOVERYPERIOD-rem)/DISCOVERYPERIOD*100)) )
 
     local udp = devData[tostring(dev)].discoverySocket
     if udp ~= nil then
@@ -721,9 +773,8 @@ local function launchUDPDiscovery( dev )
     assert(luup.devices[dev].device_type == MYTYPE, "Discovery much be launched with gateway device")
 
     -- Configure
-    local addr = "255.255.255.255" -- ??? FIX ME
+    local addr = "192.168.0.255" -- ??? FIX ME
     local port = 7359
-    local timeout = 15
 
     -- Any of this can fail, and it's OK.
     local udp = socket.udp()
@@ -740,9 +791,9 @@ local function launchUDPDiscovery( dev )
 
     devData[tostring(dev)].discoverySocket = udp
     local now = os.time()
-    devData[tostring(dev)].discoveryTime = now + timeout
+    devData[tostring(dev)].discoveryTime = now + DISCOVERYPERIOD
     devData[tostring(dev)].discoveryResponses = {}
-    
+
     scheduleDelay( { id="discovery-"..dev, func=udpDiscoveryTask, owner=dev }, 1 )
     gatewayStatus( "Discovery running..." )
 end
@@ -780,7 +831,47 @@ local function embyListServers( dev )
     error("No implementation yet")
 end
 
-local function embyLogin( username, password, dev )
+-- Log in to server with username/password. Returns auth token, which we store.
+--[[ This is another one of those things where the documentation is loose on a
+     process that requires perfection. Swagger to the rescue. Here's what worked:
+    curl -X POST "http://192.168.0.165:8096/emby/Users/AuthenticateByName" -H "accept: application/json" -H "X-Emby-Authorization: MediaBrowser Client="Vera", Device="Vera", DeviceId="123", Version="1.0.0.0"" -H "Content-Type: application/json" -d "{ \"Username\": \"patrick\", \"Pw\": \"\", \"Password\": \"\", \"PasswordMd5\", \"\"}"
+    Note that the contents of the X-Emby-Authorization header are tightly
+    checked (each required), but the values are just for show. Go figure. As of
+    April 2018, apparently, we only need to pass Pw in the data; the other
+    forms of password aren't needed.
+--]]
+local function embyServerLogin( username, password, dev )
+    assert(dev ~= nil and luup.devices[dev].device_type == SERVERTYPE)
+    setVar( SERVERSID, "Message", "Requesting auth...", dev)
+    local addr = luup.variable_get( SERVERSID, "LocalAddress", dev )
+    local req = addr .. "/emby/Users/AuthenticateByName"
+    local success, response, httpStatus = doRequest( "POST", req,
+        { ['X-Emby-Authorization']="MediaBrowser Client=\"Vera Emby Plugin\", Device=\"Vera-"..luup.pk_accesspoint.."\", DeviceId=\""..luup.pk_accesspoint.."\", Version=\"".._PLUGIN_VERSION.."\"" },
+        { Username=username, Pw=password }, dev )
+    if success then
+        local data, pos, err = json.decode( response )
+        if not err then
+            -- Successful auth, so store the new user id and api key
+            L({level=2,msg="Successful login on %2 (%1) for user %3"}, luup.devices[dev].description, dev, username)
+            setVar( SERVERSID, "Message", "Successful authorization!", dev)
+            setVar( SERVERSID, "UserId", data.User.Id, dev )
+            setVar( SERVERSID, "APIKey", data.AccessToken, dev )
+            scheduleDelay( { id=tostring(dev), owner=dev, func=startServer }, 3 ) -- (re)start server
+            return
+        else
+            D("embyLocalLogin() unparseable response at %1, %2: %3", pos, err, response)
+        end
+    elseif httpStatus == 401 then
+        L({level=2,msg="Login failed on %1 (%2) for user %3"}, luup.devices[dev].description, dev, username)
+        setVar( SERVERSID, "Message", "Invalid username/password", dev)
+        return
+    else
+        L({level=2,msg="Authorization request to %1 (%2) failed: %3"}, luup.devices[dev].description, dev, httpStatus)
+    end
+    setVar( SERVERSID, "Message", "Authorization request failed", dev)
+end
+
+local function embyRemoteLogin( username, password, dev )
     local success, response, httpStatus = doRequest( "POST", "https://connect.emby.media/service/user/authenticate", {},
         { nameOrEmail=username or "", rawpw=password or ""}, dev )
     if status then
@@ -797,7 +888,7 @@ local function embyLogin( username, password, dev )
     end
 end
 
---[[ 
+--[[
     ***************************************************************************
     A C T I O N   I M P L E M E N T A T I O N
     ***************************************************************************
@@ -807,7 +898,7 @@ end
      docs are wrong, incomplete, and less than useless. I would not have figured
      out how to get this working had it not been for the genius on their team
      who made the interactive API browser, which with a bit of fiddling, reveals
-     the secret incantations... kudos, mate, whoever you are. You da real MVP. 
+     the secret incantations... kudos, mate, whoever you are. You da real MVP.
 --]]
 function actionSessionGeneralCommand( pdev, actionpath, args )
     assert(luup.devices[pdev].device_type==SESSIONTYPE)
@@ -848,10 +939,73 @@ function actionSessionRefresh( pdev )
     scheduleDelay( tostring(server), 1 )
 end
 
-function jobEmbyLogin( pdev, username, password )
-    assert(luup.devices[pdev].device_type == MYTYPE) -- must be Emby gateway
-    if embyLogin( username, password, pdev ) then return 4,0 end
-    return 2,0
+-- Login in to server with username/password
+function actionServerLogin( pdev, username, password )
+    assert(luup.devices[pdev].device_type == SERVERTYPE) -- must be Emby gateway
+    return embyServerLogin( username, password, pdev )
+end
+
+--[[ "SmartSkip". The Emby RemoteControl API has NextTrack/PreviousTrack, and
+     these work as expected for audio play, but at least in the Android and
+     Chrome apps, they do not chapter skip video. Hmmm. OK, so this "SmartSkip"
+     looks at the current playing media type, and either uses the built-in
+     track controls, or uses the chapter data to do seek. --]]
+function actionSessionSmartSkip( pdev, backwards )
+    assert(luup.devices[pdev].device_type == SESSIONTYPE) -- must be Emby gateway
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local mt = (luup.variable_get( SESSIONSID, "PlayingItemMediaType", pdev ) or ""):lower()
+    if mt == "" then
+        -- Not playing anything.
+        return
+    elseif mt == "video" then
+        -- First, get current play position
+        local pos = getVarNumeric( "PlayingItemPosition", 0, pdev, SESSIONSID )
+        local pend = getVarNumeric( "PlayingItemRuntime", 0, pdev, SESSIONSID )
+        local ch = luup.variable_get( SESSIONSID, "PlayingItemChapters", pdev ) or ""
+        local data = json.decode( ch )
+        D("actionSessionSmartSkip() backwards=%1, position=%2, chapters=%3", backwards, pos, data)
+        local goto
+        if data then
+            if not backwards then
+                goto = pend * 10000000
+                for _,v in ipairs(data) do
+                    local chpos = math.floor( v.StartPositionTicks / 10000 ) / 1000
+                    if chpos > pos then
+                        goto = v.StartPositionTicks
+                        break
+                    end
+                end
+            else
+                goto = 0
+                local grace = getVarNumeric( "SmartSkipGrace", getVarNumeric( "SmartSkipGrace", 5, server, SERVERSID ), pdev, SESSIONSID )
+                for ix=#data,1,-1 do
+                    local v = data[ix]
+                    local chpos = math.floor( v.StartPositionTicks / 10000 ) / 1000
+                    if (chpos + grace) < pos then
+                        goto = v.StartPositionTicks
+                        break
+                    end
+                end
+            end
+        else
+            -- No chapter data, just X-second skip; skip can be session-specific or server default (30).
+            local skip = getVarNumeric( "SmartSkipDefault", getVarNumeric( "SmartSkipDefault", 30, server, SERVERSID ), pdev, SESSIONSID )
+            goto = pos + skip * (backwards and -1 or 1)
+            if pos < 0 then pos = 0 elseif pos > pend then pos = pend end
+            goto = goto * 10000000
+        end
+        --[[ Oh, and another fucking surprise ending. Emby's remote control docs for seek are wrong, too. Again, swagger to the rescue. --]]
+        local sess = luup.devices[pdev].id
+        local reqpath = "/Sessions/" .. sess .. "/Playing/Seek"
+        local ok, data, httpstat = serverRequest( "POST", reqpath, nil, nil, { Command="Seek", SeekPositionTicks=goto }, server )
+        if ok then
+            scheduleDelay( tostring(server), 2 )
+        end
+    else
+        -- Default to track commands for all other media types.
+        local cmd = backwards and "/PreviousTrack" or "/NextTrack"
+        return actionSessionPlayCommand( pdev, cmd )
+    end
 end
 
 -- Run Emby discovery (UDP broadcast port 7359)
@@ -860,8 +1014,9 @@ function jobRunDiscovery( pdev )
     return 4,0
 end
 
+-- IP discovery. Connect/query, and if we succeed, add.
 function jobDiscoverIP( pdev, addr )
-    if devData[tostring(pdev)].discoverySocket then 
+    if devData[tostring(pdev)].discoverySocket then
         L{level=2,msg="UDP discovery running, can't do direct IP discovery"}
         return 2,0
     end
@@ -880,7 +1035,7 @@ function jobDiscoverIP( pdev, addr )
     local ok, resp, httpstat = doRequest( "GET", addr .. "/System/Info/Public", nil, nil, pdev )
     if ok then
         local data,pos,err = json.decode( resp )
-        if not err then 
+        if not err then
             gatewayStatus("Found " .. data.ServerName .. " (" .. data.Id .. ")")
             devData[tostring(pdev)].discoveryResponses = { { Address=addr, Name=data.ServerName, Id=data.Id } }
             processDiscoveryResponses( pdev )
@@ -911,27 +1066,28 @@ function actionSetDebug( state, tdev )
     end
 end
 
+-- Dangerous debug stuff. Remove all child devices except servers.
 function actionClear1( dev )
     local ptr = luup.chdev.start( pluginDevice )
     for k,v in pairs(luup.devices) do
         if v.device_num_parent == pluginDevice and v.device_type == SERVERTYPE then
-            luup.chdev.append( pluginDevice, ptr, v.id, v.description, "", 
+            luup.chdev.append( pluginDevice, ptr, v.id, v.description, "",
                 "D_EmbyServer1.xml", "", "", false )
         end
     end
     luup.chdev.sync( pluginDevice, ptr )
 end
 
---[[ 
+--[[
     ***************************************************************************
     P L U G I N   B A S E
     ***************************************************************************
 --]]
--- plugin_runOnce() looks to see if a core state variable exists; if not, a 
+-- plugin_runOnce() looks to see if a core state variable exists; if not, a
 -- one-time initialization takes place.
 local function plugin_runOnce( pdev )
     local s = getVarNumeric("Version", 0, pdev, MYSID)
-    if s == _CONFIGVERSION then
+    if s ~= 0 and s == _CONFIGVERSION then
         -- Up to date.
         return
     elseif s == 0 then
@@ -960,7 +1116,7 @@ local function masterTick(pdev,taskid)
     assert(pdev == pluginDevice)
     -- Set default time for next master tick
     local nextTick = math.floor( os.time() / 60 + 1 ) * 60
-    
+
     -- Do master tick work here (dispatch)
 
     -- Schedule next master tick.
@@ -970,7 +1126,7 @@ end
 -- Start plugin running.
 function startPlugin( pdev )
     L("plugin version %2, device %1 (%3)", pdev, _PLUGIN_VERSION, luup.devices[pdev].description)
-    
+
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 
     -- Early inits
@@ -980,7 +1136,7 @@ function startPlugin( pdev )
     tickTasks = {}
     devData[tostring(pdev)] = {}
     maxEvents = getVarNumeric( "MaxEvents", 50, pdev, MYSID )
-    
+
     -- Debug?
     if getVarNumeric( "DebugMode", 0, pdev, MYSID ) ~= 0 then
         debugMode = true
@@ -1028,11 +1184,11 @@ function startPlugin( pdev )
         gatewayStatus("DISABLED")
         return true, "Disabled", _PLUGIN_NAME
     end
-    
+
     -- Initialize and start the plugin timer and master tick
     runStamp = 1
     scheduleDelay( { id="master", func=masterTick, owner=pdev }, 5 )
-    
+
     -- Start servers
     startServers( pdev )
 
@@ -1042,8 +1198,8 @@ function startPlugin( pdev )
     return true, "Ready", _PLUGIN_NAME
 end
 
--- Plugin timer tick. Using the tickTasks table, we keep track of tasks that 
--- need to be run and when, and try to stay on schedule. This keeps us light on 
+-- Plugin timer tick. Using the tickTasks table, we keep track of tasks that
+-- need to be run and when, and try to stay on schedule. This keeps us light on
 -- resources: typically one system timer only for any number of devices.
 local functions = { [tostring(masterTick)]="masterTick" }
 function taskTickCallback(p)
@@ -1095,7 +1251,7 @@ function taskTickCallback(p)
             end
         end
     end
-    
+
     -- Have we been disabled?
     if not isEnabled( pluginDevice ) then
         gatewayStatus("DISABLED")
@@ -1236,7 +1392,7 @@ function handleLuupRequest( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return alt_json_encode( st ), "application/json"
-        
+
     else
         error("Not implemented: " .. action)
     end
