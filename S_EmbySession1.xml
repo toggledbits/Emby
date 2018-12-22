@@ -71,6 +71,7 @@
                 <allowedValue>Game</allowedValue>
                 <allowedValue>Photo</allowedValue>
                 <allowedValue>Book</allowedValue>
+                <allowedValue>Playlist</allowedValue>
             </allowedValueList>
         </stateVariable>
         <stateVariable sendEvents="no">
@@ -96,11 +97,6 @@
                    <relatedStateVariable>misc_arg</relatedStateVariable>
                 </argument>
                 <argument>
-                   <name>Path</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
-                </argument>
-                <argument>
                    <name>Title</name>
                    <direction>in</direction>
                    <relatedStateVariable>misc_arg</relatedStateVariable>
@@ -110,26 +106,15 @@
                    <direction>in</direction>
                    <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
                 </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>PlayPlaylist</name>
-            <!-- Specify Id or Name; PlayCommand is optional, PlayNow (replace queue?) if not provided -->
-            <argumentList>
-                <argument>
-                   <name>Id</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>Name</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
-                </argument>
                 <argument>
                    <name>PlayCommand</name>
                    <direction>in</direction>
                    <relatedStateVariable>A_ARG_TYPE_playcommand</relatedStateVariable>
+                </argument>
+                <argument>
+                   <name>Limit</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>

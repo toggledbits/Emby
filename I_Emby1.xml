@@ -69,6 +69,17 @@
         
         <action>
             <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>PlayMedia</name>
+            <job>
+                if EmbyPlugin.actionSessionPlayMedia( lul_device, lul_settings ) then
+                    return 4,0
+                else
+                    return 2,0
+                end
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
             <name>PlayPause</name>
             <run>
                 return EmbyPlugin.actionSessionPlayCommand( lul_device, "/PlayPause" )
@@ -178,7 +189,7 @@
             <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
             <name>Mute</name>
             <run>
-                return EmbyPlugin.actionSessionGeneralCommand( lul_device, "/ToggleMute" )
+                return EmbyPlugin.actionSessionSmartMute( lul_device, true )
             </run>
         </action>
 

@@ -11,7 +11,7 @@ local debugMode = true
 
 local _PLUGIN_ID = 99999
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "0.1-181221"
+local _PLUGIN_VERSION = "0.2-181222"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
 local _CONFIGVERSION = 000000
 
@@ -55,7 +55,8 @@ local function dump(t, seen)
                 val = dump(v, seen)
             end
         elseif type(v) == "string" then
-            val = string.format("%q", v)
+            if #v > 255 then val = string.format("%q", v:sub(1,252).."...")
+            else val = string.format("%q", v) end
         elseif type(v) == "number" and (math.abs(v-os.time()) <= 86400) then
             val = tostring(v) .. "(" .. os.date("%x.%X", v) .. ")"
         else
@@ -208,7 +209,8 @@ local function addEvent( t )
     p.when = os.time()
     p.time = os.date("%Y%m%dT%H%M%S")
     local dev = p.dev or pluginDevice
-    devData[tostring(dev)].eventList = devData[tostring(dev)].eventList or { }
+    if devData[tostring(dev)] == nil then devData[tostring(dev)] = {} end
+    devData[tostring(dev)].eventList = devData[tostring(dev)].eventList or {}
     table.insert( devData[tostring(dev)].eventList, p )
     if #devData[tostring(dev)].eventList > maxEvents then table.remove(devData[tostring(dev)].eventList, 1) end
 end
@@ -409,7 +411,7 @@ local function serverRequest( method, path, params, headers, body, dev )
         table.insert( ea, "api_key=" .. urlencode(key) )
     end
     local fullurl = luup.variable_get( SERVERSID, "LocalAddress", dev ) or "http://localhost:8096"
-    fullurl = fullurl .. "/" .. path .. "?" .. table.concat( ea, "&" )
+    fullurl = fullurl .. "/emby" .. path .. "?" .. table.concat( ea, "&" )
     local success, resp, httpstat = doRequest( method or "GET", fullurl, headers, body, dev )
     D("serverRequest() doRequest returned %1,%2,%3", success, resp, httpstat)
     if success then
@@ -417,6 +419,8 @@ local function serverRequest( method, path, params, headers, body, dev )
             -- Empty response, which is OK
             return success, nil, 200
         end
+-- luup.log("Decoding json " .. tostring(#resp) .. " bytes:",2)
+-- luup.log(resp,2)
         local data,pos,err = json.decode( resp )
         if err then
             D("serverRequest() response data could not be decoded at %1, %2 in %3", pos, err, resp)
@@ -425,6 +429,13 @@ local function serverRequest( method, path, params, headers, body, dev )
         return true, data, httpstat
     end
     return success, resp, httpstat
+end
+
+local function isSessionCommandSupported( cmd, sessdev )
+    assert(luup.devices[sessdev] and luup.devices[sessdev].device_type == SESSIONTYPE)
+    local s = luup.variable_get( SESSIONSID, "SupportedCommands", sessdev ) or ""
+    if s == "" then return true end
+    return string.find( cmd, ","..s.."," ) ~= nil
 end
 
 -- Initialize session
@@ -438,6 +449,7 @@ local function initSession( sess )
     initVar( "VolumePercent", "100", sess, SESSIONSID )
     initVar( "Mute", "0", sess, "urn:micasaverde-com:serviceId:Volume1" )
     initVar( "SmartVolume", "", sess, SESSIONSID )
+    initVar( "SmartMute", "", sess, SESSIONSID )
     initVar( "PlayingItemId", "", sess, SESSIONSID )
     initVar( "PlayingItemType", "", sess, SESSIONSID )
     initVar( "CurrentStatus", "", sess, "urn:upnp-org:serviceId:AVTransport" )
@@ -463,18 +475,28 @@ local function clearPlayingState( child )
 end
 
 local function updateSessions( server, taskid )
+    assert(taskid)
     local anyPlaying = false
     local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
     if not ok then
+        luup.set_failure( 1, server )
+        if httpstat == 401 then
+            -- Auth fail, can't recover.
+            setVar( SERVERSID, "Message", "Auth fail; re-do login.", server )
+            L({level=1,msg="Authentication failure with %1 (#%2). Redo login to obtain new token."},
+                luup.devices[server].description, server)
+            return
+        end
+        setVar( SERVERSID, "Message", "Unreachable; retrying...", server )
         D("updateSessions() failed session query for %1, will retry...", server)
-        luup.set_failure( true, server )
-        -- fall through will reschedule on no-playing delay
+        scheduleDelay( taskid, 60 )
     else
+        luup.set_failure( 0, server )
         for _,sess in ipairs( data or {} ) do
             D("updateSessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
             local child = findChildById( sess.Id )
             if child then
-luup.log(json.encode(sess),2)
+-- luup.log(json.encode(sess),2)
                 setVar( SESSIONSID, "Offline", 0, child )
                 setVar( SESSIONSID, "Server", server, child )
                 setVar( SESSIONSID, "DeviceName", sess.DeviceName, child )
@@ -490,6 +512,17 @@ luup.log(json.encode(sess),2)
                 else
                     setVar( SESSIONSID, "VolumePercent", "", child )
                     setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", 0, child )
+                end
+                
+                if sess.SupportedCommands then
+                    setVar( SESSIONSID, "SupportedCommands", table.concat( sess.SupportedCommands, "," ), child )
+                else
+                    setVar( SESSIONSID, "SupportedCommands", "", child )
+                end
+                if sess.PlayableMediaTypes then
+                    setVar( SESSIONSID, "PlayableMediaTypes", table.concat( sess.PlayableMediaTypes, "," ), child )
+                else
+                    setVar( SESSIONSID, "PlayableMediaTypes", "", child )
                 end
 
                 if sess.NowPlayingItem then
@@ -550,8 +583,18 @@ local function inventorySessions( server )
     local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
     if not ok then
         D("inventorySessions() failed session query for %1, will retry...", server)
-        luup.set_failure( true, server )
+        luup.set_failure( 1, server )
+        if httpstat == 401 then
+            -- Auth fail, can't recover.
+            setVar( SERVERSID, "Message", "Auth fail; re-do login.", server )
+            L({level=1,msg="Authentication failure with %1 (#%2). Redo login to obtain new token."},
+                luup.devices[server].description, server)
+            return
+        end
+        setVar( SERVERSID, "Message", "Unreachable; retrying...", server )
+        scheduleDelay( { id=tostring(server), owner=server, info="inventoryretry", func=inventorySessions }, 60 )
     else
+        luup.set_failure( 0, server )
         -- Returns array (hopefully) of sessions (as dev nums) belonging to this server.
         local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj )
             local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
@@ -562,8 +605,14 @@ local function inventorySessions( server )
         D("inventorySessions() childSessions=%1", childSessions)
         local newSessions = {}
         for _,sess in ipairs( data or {} ) do
-            D("inventorySessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
-            if sess.SupportsRemoteControl and sess.Client ~= "DLNA" then
+            if sess.Client == "DLNA" then
+                L("Session %1 (%2) client %3 skipped, DLNA clients are not supported.",
+                    sess.DeviceName, sess.Id, sess.Client)
+            elseif not sess.SupportsRemoteControl then
+                L("Session %1 (%2) client %3 skipped, doesn't support remote control.",
+                    sess.DeviceName, sess.Id, sess.Client)
+            else
+                D("inventorySessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
                 local child = childSessions[ sess.Id ]
                 if not child then
                     table.insert( newSessions, sess )
@@ -573,9 +622,10 @@ local function inventorySessions( server )
                 end
             end
         end
-        
+
         -- Anything left in map wasn't returned by query, so assume offline.
         for k,v in pairs( childSessions ) do
+            D("inventorySession() session %1 (dev %2) missing from server response; marking offline.", k, v)
             setVar( SESSIONSID, "Offline", 1, v )
             clearPlayingState( v )
         end
@@ -583,11 +633,13 @@ local function inventorySessions( server )
         -- If we have newly discovered sessions, add them as children (causes Luup restart)
         -- ??? only at startup?
         if #newSessions > 0 then
+            addEvent{ dev=server, event="inventory", new=#newSessions }
             L({level=2,msg="Discovered %1 new sessions on %2 (#%3), adding and restarting..."}, #newSessions,
                 luup.devices[server].description, server)
             local ptr = prepForNewChildren()
             -- Create children for newly-discovered session(s)
             for _,sess in ipairs( newSessions ) do
+                L("Appending session %1 (%2) client %3", sess.DeviceName, sess.Id, sess.Client)
                 luup.chdev.append( pluginDevice, ptr, sess.Id, sess.DeviceName or sess.Id, "",
                     "D_EmbySession1.xml",
                     "",
@@ -619,20 +671,23 @@ local function startServer( server )
     D("startServer(%1)", server)
     local apikey = luup.variable_get( SERVERSID, "APIKey", server ) or ""
     if string.find( apikey, "^[xX]*$" ) then
+        addEvent{ dev=server, event="startfail", reason="Not authenticated" }
         setVar( SERVERSID, "Message", "Please log in.", server )
-        luup.set_failure( true, server )
+        luup.set_failure( 1, server )
         return
     end
 
     local ok, data, httpstat = serverRequest( "GET", "/System/Info", nil, nil, nil, server )
     if not ok then
-        luup.set_failure( true, server )
+        luup.set_failure( 1, server )
         if httpstat == 401 then
+            addEvent{ dev=server, event="startfail", reason="Invalid auth data" }
             setVar( SERVERSID, "Message", "Can't authenticate. Check API Key.", server )
-            luup.set_failure( true, server )
+            luup.set_failure( 1, server )
         else
+            addEvent{ dev=server, event="startfail", reason="Query fail: "..tostring(httpstat) }
             setVar( SERVERSID, "Message", "Can't get system data (" .. tostring(httpstat) .. "), will retry later", server )
-            scheduleDelay( {id=tostring(server), info="deferstart", owner=server, func=startServer}, getVarNumeric( "RetryInterval", 300, pluginDevice, MYSID ) )
+            scheduleDelay( { id=tostring(server), info="deferstart", owner=server, func=startServer }, getVarNumeric( "RetryInterval", 120, pluginDevice, MYSID ) )
         end
     else
         -- Do something...
@@ -643,15 +698,30 @@ local function startServer( server )
         local okmsg = string.format("Version %s on %s", data.Version or "?", data.OperatingSystem or "?")
         local id = luup.attr_get( "altid", server )
         if data.Id and id ~= data.Id then
+            addEvent{ dev=server, event="startfail", reason="Server ID changed from "..tostring(id).." to "..tostring(data.Id) }
             L({level=2,msg="Emby server at %1 ID changed, was %2 now %3, repairing..."}, data.ServerName, id, data.Id)
             setVar( SERVERSID, "Message", "ID mismatch; attempting repair.", server )
-            luup.set_failure( true, server )
+            luup.set_failure( 1, server )
             luup.attr_set( "altid", data.Id, server )
             luup.reload()
             return
         end
-
-        luup.set_failure( false, server )
+        
+        -- Check server software version
+        local pt = split( tostring(data.Version or ""), "%." )
+        local rev = (tonumber(pt[1]) or 0) + (tonumber(pt[2]) or 0) / 10
+        D("startServer() checking server %1 software rev %2", data.ServerName, rev)
+        if rev < 3.4 then
+            L({level=1,msg="Emby server %1 unsupported; please upgrade to 3.5 or higher."}, data.ServerName)
+            addEvent{ dev=server, event="startfail", reason="Server version unsupported " .. tostring(data.Version) }
+            setVar( SERVERSID, "Message", "Server version unsupported", server )
+            luup.set_failure( 1, server )
+            return
+        end
+        
+        -- Launch!
+        addEvent{ dev=server, event="start", message="Successful startup" }
+        luup.set_failure( 0, server )
         setVar( SERVERSID, "Message", "Taking session inventory...",server )
         inventorySessions( server )
         setVar( SERVERSID, "Message", okmsg, server )
@@ -674,6 +744,74 @@ end
 --[[
     D I S C O V E R Y   A N D   C O N N E C T I O N
 --]]
+
+local function askLuci(p)
+    D("askLuci(%1)", p)
+    local uci = require("uci")
+    if uci then
+        local ctx = uci.cursor(nil, "/var/state")
+        if ctx then
+            return ctx:get(unpack((split(p,"%."))))
+        else
+            D("askLuci() can't get context")
+        end
+    else
+        D("askLuci() no UCI module")
+    end
+    return nil
+end
+
+-- Query UCI for WAN IP4 IP
+local function getSystemIP4Addr( dev )
+    local vera_ip = askLuci("network.wan.ipaddr")
+    D("getSystemIP4Addr() got %1 from Luci", vera_ip)
+    if not vera_ip then
+        -- Fallback method
+        local p = io.popen("/usr/bin/GetNetworkState.sh wan_ip")
+        vera_ip = p:read("*a") or ""
+        p:close()
+        D("getSystemIP4Addr() got system ip4addr %1 using fallback", vera_ip)
+    end
+    return vera_ip:gsub("%c","")
+end
+
+-- Query UCI for WAN IP4 netmask
+local function getSystemIP4Mask( dev )
+    local mask = askLuci("network.wan.netmask");
+    D("getSystemIP4Mask() got %1 from Luci", mask)
+    if not mask then
+        -- Fallback method
+        local p = io.popen("/usr/bin/GetNetworkState.sh wan_netmask")
+        mask = p:read("*a") or ""
+        p:close()
+        D("getSystemIP4Addr() got system ip4mask %1 using fallback", mask)
+    end
+    return mask:gsub("%c","")
+end
+
+-- Compute broadcast address (IP4)
+local function getSystemIP4BCast( dev )
+    local broadcast = luup.variable_get( MYSID, "DiscoveryBroadcast", dev ) or ""
+    if broadcast ~= "" then
+        return broadcast
+    end
+    
+    -- Do it the hard way.
+    local vera_ip = getSystemIP4Addr( dev )
+    local mask = getSystemIP4Mask( dev )
+    D("getSystemIP4BCast() sys ip %1 netmask %2", vera_ip, mask)
+    local a1,a2,a3,a4 = vera_ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)")
+    local m1,m2,m3,m4 = mask:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)")
+    local bit = require("bit")
+    -- Yeah. This is my jam, baby!
+    a1 = bit.bor(bit.band(a1,m1), bit.bxor(m1,255))
+    a2 = bit.bor(bit.band(a2,m1), bit.bxor(m2,255))
+    a3 = bit.bor(bit.band(a3,m3), bit.bxor(m3,255))
+    a4 = bit.bor(bit.band(a4,m4), bit.bxor(m4,255))
+    broadcast = string.format("%d.%d.%d.%d", a1, a2, a3, a4)
+    D("getSystemIP4BCast() computed broadcast address is %1", broadcast)
+    return broadcast
+end
 
 -- Process discovery responses
 local function processDiscoveryResponses( dev )
@@ -734,7 +872,7 @@ local function udpDiscoveryTask( dev, taskid )
     D("udpDiscoveryTask(%1,%2)", dev, taskid)
 
     local rem = math.max( 0, devData[tostring(dev)].discoveryTime - os.time() )
-    gatewayStatus( string.format( "Discovery running, found %d so far (%d%%)...", 
+    gatewayStatus( string.format( "Discovery running, found %d so far (%d%%)...",
         #(devData[tostring(dev)].discoveryResponses), math.floor((DISCOVERYPERIOD-rem)/DISCOVERYPERIOD*100)) )
 
     local udp = devData[tostring(dev)].discoverySocket
@@ -773,7 +911,7 @@ local function launchUDPDiscovery( dev )
     assert(luup.devices[dev].device_type == MYTYPE, "Discovery much be launched with gateway device")
 
     -- Configure
-    local addr = "192.168.0.255" -- ??? FIX ME
+    local addr = getSystemIP4BCast( dev )
     local port = 7359
 
     -- Any of this can fail, and it's OK.
@@ -945,6 +1083,59 @@ function actionServerLogin( pdev, username, password )
     return embyServerLogin( username, password, pdev )
 end
 
+-- Play media; see the README/docs
+function actionSessionPlayMedia( pdev, argv )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local ids
+    if (argv.Id or "") ~= "" then
+        ids = argv.Id
+    else
+        -- Ids not passed; we need to search. First, get items for user,
+        -- restrict by media type if given.
+        local userid = luup.variable_get( SERVERSID, "UserId", server ) or ""
+        local reqpath
+        if userid ~= "" then
+            reqpath = "/Users/" .. userid .. "/Items"
+        else
+            reqpath = "/Items"
+        end
+        local ea = { Recursive=true, Fields="Path", IncludeMedia=true,
+            IncludePeople=false, IncludeGenres=false, IncludeStudios=false,
+            IncludeArtists=false, EnableImages=false, EnableUserData=false,
+            Limit=tonumber(argv.Limit or "25") or 25 } -- StartIndex=0
+        if (argv.MediaType or "") ~= "" then
+            ea.IncludeItemTypes = argv.MediaType == "*" and "" or argv.MediaType
+        else
+            local mts = luup.variable_get( SESSIONSID, "PlayableMediaTypes", pdev ) or ""
+            if mts ~= "" then
+                ea.IncludeItemTypes = argv.mts
+            end
+        end
+        ea.searchTerm = argv.Title or "``````"
+        local il = {}
+        local ok, data, httpstat = serverRequest( "GET", reqpath, ea, nil, nil, server )
+        if not ok then
+            L({level=2,msg="Media query failed (%1); path %2 params %3"}, httpstat, reqpath, ea)
+            return false
+        end
+        -- OK. Now go through items to find those that match. Stack em up.
+        D("actionSessionPlayMedia() evaluating %1 matches of %2", #data.Items, data.TotalRecordCount)
+        for _,item in ipairs( data.Items or {} ) do
+            table.insert( il, item.Id )
+        end
+        L("%1 (%2) PlayMedia action search found %3", luup.devices[pdev].description, pdev, data.TotalRecordCount or #il)
+        ids = table.concat( il, "," )
+    end
+    local cmd = argv.PlayCommand or "PlayNow"
+    L("%1 (%2) %3 %4", luup.devices[pdev].description, pdev, cmd, ids)
+    local ea = { ItemIds=ids, PlayCommand=cmd }
+    local ok, data, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
+        ea, nil, nil, server )
+    return ok
+end
+
 --[[ "SmartSkip". The Emby RemoteControl API has NextTrack/PreviousTrack, and
      these work as expected for audio play, but at least in the Android and
      Chrome apps, they do not chapter skip video. Hmmm. OK, so this "SmartSkip"
@@ -1008,6 +1199,84 @@ function actionSessionSmartSkip( pdev, backwards )
     end
 end
 
+--[[ "SmartMute" -- three different ways to get mute done: /ToggleMute command
+     (if/when it works), SetVolume (0/current), or Pause.
+     If toggle is true, mute state toggles and state is ignored. Otherwise, 
+     state sets mute (true=mute).
+--]]
+function actionSessionSmartMute( pdev, toggle, state )
+    assert(luup.devices[pdev].device_type == SESSIONTYPE) -- must be Emby gateway
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local smc = luup.variable_get( SESSIONSID, "SmartMute", pdev ) or ""
+    local mute = getVarNumeric( "Mute", 0, pdev, "urn:micasaverde-com:serviceId:Mute" )
+    if smc:lower() == "pause" then
+        if toggle then
+            local ts = luup.variable_get( "urn:upnp-org:serviceId:AVTransport1", "TransportState", pdev ) or "STOPPED"
+            state = not (ts == "PLAYBACK_PAUSED")
+        end
+        -- Pause/unpause based on state
+        return actionSessionGeneralCommand( lul_device, state and "/Pause" or "/Unpause" )
+    elseif smc ~= "" and smc ~= "0" then
+        -- Volume control
+        if not isSessionCommandSupported( "SetVolume", pdev ) then
+            L({level=2,msg="%1 (%2) does not support SetVolume; try \"pause\" SmartMute configuration."},
+                luup.devices[pdev].description, pdev)
+            return
+        end
+        local vn = GetVarNumeric( "VolumePercent", 0, pdev, SESSIONSID )
+        if toggle then
+            state = vn ~= 0 -- 0=muted, so state=opposite
+        end
+        if state then
+            -- Save current volume level
+            if vn > 0 then
+                setVar( SESSIONSID, "SmartMuteSavedLevel", vn, pdev )
+            end
+            vn = 0
+        else
+            vn = getVarNumeric( "SmartMuteSavedLevel", vn, pdev, SESSIONSID )
+            setVar( SESSIONSID, "SmartMuteSavedLevel", 0, pdev )
+        end
+        return actionSessionGeneralCommand( pdev, nil,
+                    { Name="SetVolume", Arguments={ Volume=tostring(vn) } } )
+    else
+        -- Use commands
+        if toggle then
+            if isSessionCommandSupported( "ToggleMute", pdev ) then
+                return action.SessionGeneralCommand( pdev, "/ToggleMute" )
+            end
+            -- ToggleMute isn't supported, so fall back to direct Mute/Unmute (hopefully)
+            state = mute == 0
+        end
+        if state then
+            -- Mute
+            if isSessionCommandSupported( "Mute", pdev ) then
+                return actionSessionGeneralCommand( pdev, "/Mute" )
+            elseif isSessionCommandSupported( "ToggleMute", pdev ) then
+                -- Use ToggleMute if not muted
+                if mute == 0 then
+                    return actionSessionGeneralCommand( pdev, "/ToggleMute" )
+                end
+            else
+                L({level=2,msg="%1 (%2) does not support ToggleMute, Mute or Unmute; try configuring SmartMute."},
+                    luup.devices[pdev].description, pdev)
+            end
+        else
+            if isSessionCommandSupported( "Unmute", pdev ) then
+                return actionSessionGeneralCommand( pdev, "/Unmute" )
+            elseif isSessionCommandSupported( "ToggleMute", pdev ) then
+                -- Use ToggleMute if muted
+                if mute ~= 0 then
+                    return actionSessionGeneralCommand( pdev, "/ToggleMute" )
+                end
+            else
+                L({level=2,msg="%1 (%2) does not support ToggleMute, Mute or Unmute; try configuring SmartMute."},
+                    luup.devices[pdev].description, pdev)
+            end
+        end
+    end
+end
+
 -- Run Emby discovery (UDP broadcast port 7359)
 function jobRunDiscovery( pdev )
     launchUDPDiscovery( pdev )
@@ -1032,7 +1301,7 @@ function jobDiscoverIP( pdev, addr )
     end
     L("Attempting direct IP discovery at %1", addr)
     gatewayStatus("Contacting " .. addr)
-    local ok, resp, httpstat = doRequest( "GET", addr .. "/System/Info/Public", nil, nil, pdev )
+    local ok, resp, httpstat = doRequest( "GET", addr .. "/emby/System/Info/Public", nil, nil, pdev )
     if ok then
         local data,pos,err = json.decode( resp )
         if not err then
@@ -1383,10 +1652,14 @@ function handleLuupRequest( lul_request, lul_parameters, lul_outputformat )
             devices={}
         }
         for k,v in pairs( luup.devices ) do
-            if v.device_type == MYTYPE or v.parent_device_num == pluginDevice then
+            if v.device_type == MYTYPE or v.device_num_parent == pluginDevice then
                 local devinfo = getDevice( k, pluginDevice, v ) or {}
                 if k == pluginDevice then
                     devinfo.tickTasks = tickTasks
+                    devinfo.devData = devData
+                end
+                if devData[tostring(k)] and devData[tostring(k)].eventList then
+                    devinfo.eventList = devData[tostring(k)].eventList
                 end
                 table.insert( st.devices, devinfo )
             end
