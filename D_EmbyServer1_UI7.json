@@ -56,10 +56,36 @@
 				},
 				
 				{
+					"ControlType": "label",
+					"text_align": "left",
+					"Label": {
+						"lang_tag": "label_username",
+						"text": "Username"
+					},
+					"Display": {
+						"Top": 40,
+						"Left": 0,
+						"Width": 120,
+						"Height": 20
+					}
+				},{
+					"ControlType": "label",
+					"text_align": "left",
+					"Label": {
+						"lang_tag": "label_password",
+						"text": "Password"
+					},
+					"Display": {
+						"Top": 40,
+						"Left": 128,
+						"Width": 120,
+						"Height": 20
+					}
+				},{
 					"ControlType": "input",
 					"ID": "username",
 					"Display": {
-						"Top": 30,
+						"Top": 60,
 						"Left": 0,
 						"Width": 120,
 						"Height": 24
@@ -68,7 +94,7 @@
 					"ControlType": "input",
 					"ID": "password",
 					"Display": {
-						"Top": 30,
+						"Top": 60,
 						"Left": 128,
 						"Width": 120,
 						"Height": 24
@@ -83,7 +109,7 @@
 						"text": "Log In"
 					},
 					"Display": {
-						"Top": 30,
+						"Top": 60,
 						"Left": 256,
 						"Width": 120,
 						"Height": 25
@@ -107,10 +133,10 @@
 					"left": "0",
 					"Label": {
 						"lang_tag": "emby_ex_login",
-						"text": "Use your Emby username/password for one-time authentication. These are not stored--Emby generates an API key for me (you do not need to generate manual API keys)."
+						"text": "Use your Emby username/password for one-time authentication. These are not stored--Emby generates an API key for this device to use (you do not need to generate manual API keys)."
 					},
 					"Display": {
-						"Top": 60,
+						"Top": 90,
 						"Left": 0,
 						"Width": 630,
 						"Height": 48
@@ -122,7 +148,7 @@
 					"top": 1,
 					"left": 0,
 					"Display": {
-						"Top": 120,
+						"Top": 150,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24,
@@ -134,7 +160,7 @@
 					"top": 1,
 					"left": 0,
 					"Display": {
-						"Top": 150,
+						"Top": 180,
 						"Left": 0,
 						"Width": 320,
 						"Height": 24,

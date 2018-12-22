@@ -52,7 +52,7 @@
 						"text": "Pause"
 					},
 					"Display": {
-						"Service": "urn:upnp-org:serviceId:AVTransport",
+						"Service": "urn:upnp-org:serviceId:AVTransport1",
 						"Variable": "TransportState",
 						"Value": "PAUSED_PLAYBACK",
 						"Top": 30,
@@ -74,7 +74,7 @@
 						"text": "Stop"
 					},
 					"Display": {
-						"Service": "urn:upnp-org:serviceId:AVTransport",
+						"Service": "urn:upnp-org:serviceId:AVTransport1",
 						"Variable": "TransportState",
 						"Value": "STOPPED",
 						"Top": 30,
@@ -157,8 +157,8 @@
 					"Display": {
 						"Service": "urn:micasaverde-com:serviceId:Volume1",
 						"Top": 30,
-						"Left": 340,
-						"Width": 50,
+						"Left": 240,
+						"Width": 60,
 						"Height": 20
 					},
 					"Command": {
@@ -179,8 +179,8 @@
 					"Display": {
 						"Service": "urn:micasaverde-com:serviceId:Volume1",
 						"Top": 30,
-						"Left": 400,
-						"Width": 50,
+						"Left": 310,
+						"Width": 60,
 						"Height": 20
 					},
 					"Command": {
@@ -202,9 +202,9 @@
 						"Service": "urn:micasaverde-com:serviceId:Volume1",
 						"Variable": "Mute",
 						"Value": 1,
-						"Top": 30,
-						"Left": 460,
-						"Width": 50,
+						"Top": 60,
+						"Left": 240,
+						"Width": 60,
 						"Height": 20
 					},
 					"Command": {
@@ -218,7 +218,7 @@
 					"text_align": "left",
 					"Label": {
 						"lang_tag": "playing",
-						"text": "Playing..."
+						"text": "Status:"
 					},
 					"Display": {
 						"Top": 100,
@@ -237,7 +237,7 @@
 					"y": 1,
 					"text_align": "left",
 					"Display": {
-						"Service": "urn:upnp-org:serviceId:AVTransport",
+						"Service": "urn:upnp-org:serviceId:AVTransport1",
 						"Variable": "CurrentStatus",
 						"Top": 100,
 						"Left": 110,
@@ -285,7 +285,7 @@
 			"lang_tag": "playing_state",
 			"text": "Playing state"
 		},
-		"serviceId": "urn:upnp-org:serviceId:AVTransport",
+		"serviceId": "urn:upnp-org:serviceId:AVTransport1",
 		"argumentList": [{
 			"id": 1,
 			"dataType": "string",

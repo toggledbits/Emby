@@ -432,10 +432,11 @@ local function serverRequest( method, path, params, headers, body, dev )
 end
 
 local function isSessionCommandSupported( cmd, sessdev )
+    D("isSessionCommandSupported(%1,%2)", cmd, sessdev)
     assert(luup.devices[sessdev] and luup.devices[sessdev].device_type == SESSIONTYPE)
     local s = luup.variable_get( SESSIONSID, "SupportedCommands", sessdev ) or ""
     if s == "" then return true end
-    return string.find( cmd, ","..s.."," ) ~= nil
+    return string.find( ","..s..",", ","..cmd.."," ) ~= nil
 end
 
 -- Initialize session
@@ -452,8 +453,8 @@ local function initSession( sess )
     initVar( "SmartMute", "", sess, SESSIONSID )
     initVar( "PlayingItemId", "", sess, SESSIONSID )
     initVar( "PlayingItemType", "", sess, SESSIONSID )
-    initVar( "CurrentStatus", "", sess, "urn:upnp-org:serviceId:AVTransport" )
-    initVar( "TransportState", "STOPPED", sess, "urn:upnp-org:serviceId:AVTransport" )
+    initVar( "CurrentStatus", "", sess, "urn:upnp-org:serviceId:AVTransport1" )
+    initVar( "TransportState", "STOPPED", sess, "urn:upnp-org:serviceId:AVTransport1" )
     initVar( "SmartSkipDefault", "", sess, SESSIONSID )
     initVar( "SmartSkipGrace", "", sess, SESSIONSID )
 end
@@ -470,8 +471,15 @@ local function clearPlayingState( child )
     setVar( SESSIONSID, "PlayingItemRuntime", "0", child )
     setVar( SESSIONSID, "PlayingItemChapters", "", child )
     setVar( SESSIONSID, "DisplayPosition", "--:-- / --:--", child )
-    setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", "", child )
-    setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", "STOPPED", child )
+    setVar( "urn:upnp-org:serviceId:AVTransport1", "CurrentStatus", "", child )
+    setVar( "urn:upnp-org:serviceId:AVTransport1", "TransportState", "STOPPED", child )
+end
+
+local function clearServerSessions( server )
+    local children = getChildDevices( SESSIONSID, nil, function( child ) return getVarNumeric( "Server", 0, child, SESSIONSID ) == server end )
+    for _,k in ipairs( children ) do
+        clearPlayingState( k )
+    end
 end
 
 local function updateSessions( server, taskid )
@@ -487,11 +495,21 @@ local function updateSessions( server, taskid )
                 luup.devices[server].description, server)
             return
         end
-        setVar( SERVERSID, "Message", "Unreachable; retrying...", server )
-        D("updateSessions() failed session query for %1, will retry...", server)
-        scheduleDelay( taskid, 60 )
+        D("updateSessions() failed session query for %1", server)
+        local lastup = getVarNumeric( "LastUpdate", 0, server, SERVERSID )
+        local delta = os.time() - lastup
+        if delta < 120 then
+            setVar( SERVERSID, "Message", "Unreachable; retrying...", server )
+        else
+            clearServerSessions( server )
+            setVar( SERVERSID, "Message", "Down since " .. os.date("%x %X", lastup), server )
+        end
+        if delta >= 600 then L({level=2,"%1 (%2) unreachable since %3."}, luup.devices[server].description, server, os.date("%x %X", lastup)) end
+        scheduleDelay( taskid, (delta >= 600) and 120 or 30 )
+        return
     else
         luup.set_failure( 0, server )
+        setVar( SERVERSID, "LastUpdate", os.time(), server )
         for _,sess in ipairs( data or {} ) do
             D("updateSessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
             local child = findChildById( sess.Id )
@@ -544,7 +562,7 @@ local function updateSessions( server, taskid )
                         end
                         status = status .. ")"
                     end
-                    setVar( "urn:upnp-org:serviceId:AVTransport", "CurrentStatus", status, child )
+                    setVar( "urn:upnp-org:serviceId:AVTransport1", "CurrentStatus", status, child )
 
                     local runtime = math.floor( (sess.NowPlayingItem.RunTimeTicks or 0) / 10000 ) / 1000 -- frac seconds
                     setVar( SESSIONSID, "PlayingItemRuntime", runtime, child )
@@ -558,7 +576,7 @@ local function updateSessions( server, taskid )
 
                     if sess.PlayState then
                         local ts = sess.PlayState.IsPaused and "PAUSED_PLAYBACK" or "PLAYING"
-                        setVar( "urn:upnp-org:serviceId:AVTransport", "TransportState", ts, child )
+                        setVar( "urn:upnp-org:serviceId:AVTransport1", "TransportState", ts, child )
                         local pos = math.floor( (sess.PlayState.PositionTicks or 0) / 10000 ) / 1000
                         setVar( SESSIONSID, "PlayingItemPosition", pos, child )
                         local dp = string.format( "%02d:%02d / %02d:%02d", math.floor( pos / 60 ), math.floor( pos ) % 60,
@@ -574,6 +592,7 @@ local function updateSessions( server, taskid )
     end
 
     -- Reschedule for update -- ??? TIMING FIXME?
+    setVar( SERVERSID, "Message", anyPlaying and "Active" or "Idle", server )
     local delay = getVarNumeric( anyPlaying and "SessionUpdateIntervalPlaying" or "SessionUpdateIntervalIdle", anyPlaying and 5 or 30, server, SERVERSID )
     scheduleDelay( taskid, delay )
 end
@@ -586,13 +605,15 @@ local function inventorySessions( server )
         luup.set_failure( 1, server )
         if httpstat == 401 then
             -- Auth fail, can't recover.
+            clearServerSessions( server )
             setVar( SERVERSID, "Message", "Auth fail; re-do login.", server )
             L({level=1,msg="Authentication failure with %1 (#%2). Redo login to obtain new token."},
                 luup.devices[server].description, server)
             return
         end
         setVar( SERVERSID, "Message", "Unreachable; retrying...", server )
-        scheduleDelay( { id=tostring(server), owner=server, info="inventoryretry", func=inventorySessions }, 60 )
+        scheduleDelay( { id=tostring(server), owner=server, info="inventoryretry", func=inventorySessions }, 120 )
+        return
     else
         luup.set_failure( 0, server )
         -- Returns array (hopefully) of sessions (as dev nums) belonging to this server.
@@ -712,7 +733,7 @@ local function startServer( server )
         local rev = (tonumber(pt[1]) or 0) + (tonumber(pt[2]) or 0) / 10
         D("startServer() checking server %1 software rev %2", data.ServerName, rev)
         if rev < 3.4 then
-            L({level=1,msg="Emby server %1 unsupported; please upgrade to 3.5 or higher."}, data.ServerName)
+            L({level=1,msg="Emby server %1 unsupported; please upgrade to 3.4 or higher."}, data.ServerName)
             addEvent{ dev=server, event="startfail", reason="Server version unsupported " .. tostring(data.Version) }
             setVar( SERVERSID, "Message", "Server version unsupported", server )
             luup.set_failure( 1, server )
@@ -1205,17 +1226,19 @@ end
      state sets mute (true=mute).
 --]]
 function actionSessionSmartMute( pdev, toggle, state )
+    D("actionSessionSmartMute(%1,%2,%3)", pdev, toggle, state)
     assert(luup.devices[pdev].device_type == SESSIONTYPE) -- must be Emby gateway
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     local smc = luup.variable_get( SESSIONSID, "SmartMute", pdev ) or ""
-    local mute = getVarNumeric( "Mute", 0, pdev, "urn:micasaverde-com:serviceId:Mute" )
+    local mute = getVarNumeric( "Mute", 0, pdev, "urn:micasaverde-com:serviceId:Volume1" )
     if smc:lower() == "pause" then
         if toggle then
             local ts = luup.variable_get( "urn:upnp-org:serviceId:AVTransport1", "TransportState", pdev ) or "STOPPED"
-            state = not (ts == "PLAYBACK_PAUSED")
+            state = not (ts == "PAUSED_PLAYBACK")
         end
+        D("actionSessionSmartMute() play/pause, target mute=%1", state)
         -- Pause/unpause based on state
-        return actionSessionGeneralCommand( lul_device, state and "/Pause" or "/Unpause" )
+        return actionSessionPlayCommand( pdev, state and "/Pause" or "/Unpause" )
     elseif smc ~= "" and smc ~= "0" then
         -- Volume control
         if not isSessionCommandSupported( "SetVolume", pdev ) then
@@ -1223,10 +1246,11 @@ function actionSessionSmartMute( pdev, toggle, state )
                 luup.devices[pdev].description, pdev)
             return
         end
-        local vn = GetVarNumeric( "VolumePercent", 0, pdev, SESSIONSID )
+        local vn = getVarNumeric( "VolumePercent", 0, pdev, SESSIONSID )
         if toggle then
             state = vn ~= 0 -- 0=muted, so state=opposite
         end
+        D("actionSessionSmartMute() volume control, current %1, target mute=%2", vn, state)
         if state then
             -- Save current volume level
             if vn > 0 then
@@ -1241,13 +1265,15 @@ function actionSessionSmartMute( pdev, toggle, state )
                     { Name="SetVolume", Arguments={ Volume=tostring(vn) } } )
     else
         -- Use commands
+        D("actionSessionSmartMute() API standard mute, current mute=%1", mute)
         if toggle then
             if isSessionCommandSupported( "ToggleMute", pdev ) then
-                return action.SessionGeneralCommand( pdev, "/ToggleMute" )
+                return actionSessionGeneralCommand( pdev, "/ToggleMute" )
             end
             -- ToggleMute isn't supported, so fall back to direct Mute/Unmute (hopefully)
             state = mute == 0
         end
+        D("actionSessionSmartMute() target mute=%1", state)
         if state then
             -- Mute
             if isSessionCommandSupported( "Mute", pdev ) then

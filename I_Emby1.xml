@@ -175,7 +175,7 @@
                     if em &gt; 0 then
                         local cv = luup.variable_get( "urn:toggledbits-com:serviceId:EmbySession1", "VolumePercent", lul_device )
                         cv = (tonumber(cv) or 0) - em
-                        if cv &lt; em then cv = em end
+                        if cv &lt; 0 then cv = 0 end
                         -- See SetVolume above
                         return EmbyPlugin.actionSessionGeneralCommand( lul_device, nil, 
                             { Name="SetVolume", Arguments={ Volume=tostring(cv) } } )
@@ -189,6 +189,7 @@
             <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
             <name>Mute</name>
             <run>
+                luup.log("MUTE action (toggle)")
                 return EmbyPlugin.actionSessionSmartMute( lul_device, true )
             </run>
         </action>
