@@ -50,6 +50,37 @@
                 <maximum>100</maximum>
             </allowedValueRange>
         </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>TransportState</name>
+            <dataType>string</dataType>
+            <defaultValue>STOPPED</defaultValue>
+            <shortCode>transportstate</shortCode>
+            <allowedValueList>
+                <allowedValue>STOPPED</allowedValue>
+                <allowedValue>PLAYING</allowedValue>
+                <allowedValue>PAUSED</allowedValue>
+            </allowedValueList>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>DisplayPosition</name>
+            <dataType>string</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>DisplayStatus</name>
+            <dataType>string</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>PlayingItemId</name>
+            <dataType>string</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>PlayingItemRuntime</name>
+            <dataType>r4</dataType>
+        </stateVariable>
+        <stateVariable sendEvents="yes">
+            <name>PlayingItemPosition</name>
+            <dataType>r4</dataType>
+        </stateVariable>
         <stateVariable sendEvents="no">
             <name>misc_arg</name>
             <dataType>string</dataType>

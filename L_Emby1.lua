@@ -448,13 +448,14 @@ local function initSession( sess )
     initVar( "Client", "", sess, SESSIONSID )
     initVar( "Version", "", sess, SESSIONSID )
     initVar( "VolumePercent", "100", sess, SESSIONSID )
+    initVar( "DisplayPosition", "", sess, SESSIONSID )
     initVar( "Mute", "0", sess, "urn:micasaverde-com:serviceId:Volume1" )
     initVar( "SmartVolume", "", sess, SESSIONSID )
     initVar( "SmartMute", "", sess, SESSIONSID )
     initVar( "PlayingItemId", "", sess, SESSIONSID )
     initVar( "PlayingItemType", "", sess, SESSIONSID )
-    initVar( "CurrentStatus", "", sess, "urn:upnp-org:serviceId:AVTransport1" )
-    initVar( "TransportState", "STOPPED", sess, "urn:upnp-org:serviceId:AVTransport1" )
+    initVar( "DisplayStatus", "", sess, SESSIONSID )
+    initVar( "TransportState", "STOPPED", sess, SESSIONSID )
     initVar( "SmartSkipDefault", "", sess, SESSIONSID )
     initVar( "SmartSkipGrace", "", sess, SESSIONSID )
 end
@@ -471,12 +472,12 @@ local function clearPlayingState( child )
     setVar( SESSIONSID, "PlayingItemRuntime", "0", child )
     setVar( SESSIONSID, "PlayingItemChapters", "", child )
     setVar( SESSIONSID, "DisplayPosition", "--:-- / --:--", child )
-    setVar( "urn:upnp-org:serviceId:AVTransport1", "CurrentStatus", "", child )
-    setVar( "urn:upnp-org:serviceId:AVTransport1", "TransportState", "STOPPED", child )
+    setVar( SESSIONSID, "DisplayStatus", "", child )
+    setVar( SESSIONSID, "TransportState", "STOPPED", child )
 end
 
 local function clearServerSessions( server )
-    local children = getChildDevices( SESSIONSID, nil, function( child ) return getVarNumeric( "Server", 0, child, SESSIONSID ) == server end )
+    local children = getChildDevices( SESSIONTYPE, nil, function( child ) return getVarNumeric( "Server", 0, child, SESSIONSID ) == server end )
     for _,k in ipairs( children ) do
         clearPlayingState( k )
     end
@@ -562,7 +563,7 @@ local function updateSessions( server, taskid )
                         end
                         status = status .. ")"
                     end
-                    setVar( "urn:upnp-org:serviceId:AVTransport1", "CurrentStatus", status, child )
+                    setVar( SESSIONSID, "DisplayStatus", status, child )
 
                     local runtime = math.floor( (sess.NowPlayingItem.RunTimeTicks or 0) / 10000 ) / 1000 -- frac seconds
                     setVar( SESSIONSID, "PlayingItemRuntime", runtime, child )
@@ -575,8 +576,8 @@ local function updateSessions( server, taskid )
                     end
 
                     if sess.PlayState then
-                        local ts = sess.PlayState.IsPaused and "PAUSED_PLAYBACK" or "PLAYING"
-                        setVar( "urn:upnp-org:serviceId:AVTransport1", "TransportState", ts, child )
+                        local ts = sess.PlayState.IsPaused and "PAUSED" or "PLAYING"
+                        setVar( SESSIONSID, "TransportState", ts, child )
                         local pos = math.floor( (sess.PlayState.PositionTicks or 0) / 10000 ) / 1000
                         setVar( SESSIONSID, "PlayingItemPosition", pos, child )
                         local dp = string.format( "%02d:%02d / %02d:%02d", math.floor( pos / 60 ), math.floor( pos ) % 60,
@@ -679,6 +680,8 @@ end
 -- One-time init for server
 local function initServer( server )
     D("initServer(%1)", server)
+    initVar( "Message", "", server, SERVERSID )
+    initVar( "LastUpdate", "0", server, SERVERSID )
     initVar( "APIKey", "", server, SERVERSID )
     initVar( "UserId", "", server, SERVERSID )
     initVar( "SessionUpdateIntervalIdle", "", server, SERVERSID )
@@ -1233,8 +1236,8 @@ function actionSessionSmartMute( pdev, toggle, state )
     local mute = getVarNumeric( "Mute", 0, pdev, "urn:micasaverde-com:serviceId:Volume1" )
     if smc:lower() == "pause" then
         if toggle then
-            local ts = luup.variable_get( "urn:upnp-org:serviceId:AVTransport1", "TransportState", pdev ) or "STOPPED"
-            state = not (ts == "PAUSED_PLAYBACK")
+            local ts = luup.variable_get( SESSIONSID, "TransportState", pdev ) or "STOPPED"
+            state = not (ts == "PAUSED")
         end
         D("actionSessionSmartMute() play/pause, target mute=%1", state)
         -- Pause/unpause based on state
