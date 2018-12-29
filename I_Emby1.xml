@@ -64,6 +64,13 @@
                 return 2,0
             </job>
         </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbyServer1</serviceId>
+            <name>Inventory</name>
+            <job>
+                return EmbyPlugin.jobServerInventory( lul_device )
+            </job>
+        </action>
         
         <!-- ACTIONS FOR SESSIONS -->
         
@@ -130,6 +137,7 @@
                 return EmbyPlugin.actionSessionPlayCommand( lul_device, "/Stop" )
             </run>
         </action>
+        <!-- Note: skip up/down is relative to playlist... skip up is previous song, moving backwards in playlist -->
         <action>
             <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
             <name>SkipDown</name>
@@ -140,6 +148,21 @@
         <action>
             <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
             <name>SkipUp</name>
+            <run>
+                return EmbyPlugin.actionSessionSmartSkip( lul_device, true )
+            </run>
+        </action>
+        <!-- ChapterUp/Down provided as synonyms for skip, but note Up/Down relative to chapter #s, so up is forward in this case -->
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>ChapterUp</name>
+            <run>
+                return EmbyPlugin.actionSessionSmartSkip( lul_device, false )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>
+            <name>ChapterDown</name>
             <run>
                 return EmbyPlugin.actionSessionSmartSkip( lul_device, true )
             </run>
@@ -189,7 +212,6 @@
             <serviceId>urn:micasaverde-com:serviceId:Volume1</serviceId>
             <name>Mute</name>
             <run>
-                luup.log("MUTE action (toggle)")
                 return EmbyPlugin.actionSessionSmartMute( lul_device, true )
             </run>
         </action>

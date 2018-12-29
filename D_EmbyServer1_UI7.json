@@ -144,13 +144,35 @@
 				},
 
 				{
+					"ControlType": "button",
+					"top": "2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "cmd_emby_inv",
+						"text": "Inventory Server"
+					},
+					"Display": {
+						"Top": 150,
+						"Left": 256,
+						"Width": 150,
+						"Height": 25
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
+						"Action": "Inventory",
+						"Parameters": []
+					},
+					"ControlCode": "run_inventory"
+				},
+
+				{
 					"ControlType": "variable",
 					"top": 1,
 					"left": 0,
 					"Display": {
 						"Top": 150,
 						"Left": 0,
-						"Width": 320,
+						"Width": 150,
 						"Height": 24,
 						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
 						"Variable": "ServerName"
@@ -160,9 +182,9 @@
 					"top": 1,
 					"left": 0,
 					"Display": {
-						"Top": 180,
-						"Left": 0,
-						"Width": 320,
+						"Top": 150,
+						"Left": 160,
+						"Width": 90,
 						"Height": 24,
 						"Service": "urn:toggledbits-com:serviceId:EmbyServer1",
 						"Variable": "Version"

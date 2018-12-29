@@ -62,5 +62,9 @@
                 </argument>
             </argumentList>
         </action>
+        <action>
+            <name>Inventory</name>
+            <argumentList/>
+        </action>
     </actionList>
 </scpd>

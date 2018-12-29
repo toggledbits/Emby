@@ -98,11 +98,23 @@
             <dataType>string</dataType>
             <allowedValueList>
                 <allowedValue>Audio</allowedValue>
+                <allowedValue>BoxSet</allowedValue>
+                <allowedValue>MusicAlbum</allowedValue>
+                <allowedValue>Artist</allowedValue>
+                <allowedValue>Season</allowedValue>
+                <allowedValue>Series</allowedValue>
+                <allowedValue>Movie</allowedValue>
+                <allowedValue>Edisode</allowedValue>
+                <allowedValue>Trailer</allowedValue>
+                <allowedValue>MusicVideo</allowedValue>
+                <allowedValue>AdultVideo</allowedValue>
                 <allowedValue>Video</allowedValue>
                 <allowedValue>Game</allowedValue>
+                <allowedValue>GameSystem</allowedValue>
                 <allowedValue>Photo</allowedValue>
                 <allowedValue>Book</allowedValue>
                 <allowedValue>Playlist</allowedValue>
+                <allowedValue>Folder</allowedValue>
             </allowedValueList>
         </stateVariable>
         <stateVariable sendEvents="no">
