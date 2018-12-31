@@ -7,9 +7,9 @@
 
 module("L_Emby1", package.seeall)
 
-local debugMode = true
+local debugMode = false
 
-local _PLUGIN_ID = 99999
+local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
 local _PLUGIN_VERSION = "0.2-181222"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
