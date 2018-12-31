@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "0.2-181222"
+local _PLUGIN_VERSION = "0.3develop-181231"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
-local _CONFIGVERSION = 000000
+local _CONFIGVERSION = 000001
 
 local math = require "math"
 local string = require "string"
