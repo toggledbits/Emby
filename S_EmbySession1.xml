@@ -73,7 +73,7 @@
             <name>PlayingItemId</name>
             <dataType>string</dataType>
         </stateVariable>
-        <stateVariable sendEvents="yes">
+        <stateVariable sendEvents="no">
             <name>PlayingItemRuntime</name>
             <dataType>r4</dataType>
         </stateVariable>

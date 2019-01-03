@@ -281,7 +281,7 @@ local function getChildDevices( typ, parent, filter )
     parent = parent or pluginDevice
     local res = {}
     for k,v in pairs(luup.devices) do
-        if v.device_num_parent == parent and v.device_type == typ and (filter==nil or filter(k, v)) then
+        if v.device_num_parent == parent and ( typ == nil or v.device_type == typ ) and ( filter==nil or filter(k, v) ) then
             table.insert( res, k )
         end
     end
@@ -490,6 +490,14 @@ local function clearServerSessions( server )
     end
 end
 
+local function clearChildren( pdev )
+    local children = getChildDevices( SERVERTYPE, pdev )
+    for _,k in ipairs( children ) do
+        clearServerSessions( k )
+        setVar( SERVERSID, "Message", "Stopped", k )
+    end
+end
+
 local function updateSession( sdata, session, server )
     D("updateSession(%1,%2,%3)", "sdata", session, server)
     setVar( SESSIONSID, "Offline", 0, session )
@@ -529,7 +537,7 @@ local function updateSession( sdata, session, server )
         setVar( SESSIONSID, "PlayingItemArtist", sdata.NowPlayingItem.AlbumArtist, session )
         setVar( SESSIONSID, "PlayingItemAlbumId", sdata.NowPlayingItem.AlbumId, session )
         setVar( SESSIONSID, "PlayingItemAlbum", sdata.NowPlayingItem.Album, session )
-        
+
         local status = sdata.NowPlayingItem.Name
         if sdata.NowPlayingItem.MediaType == "Audio" then
             status = status .. " (" .. (sdata.NowPlayingItem.Album or "?")
@@ -878,7 +886,7 @@ local function getSystemIP4BCast( dev )
     if broadcast ~= "" then
         return broadcast
     end
-    
+
     if isOpenLuup then
         gatewayStatus( "openLuup must set DiscoveryBroadcast first" )
         error("You must set DiscoveryBroadcast in the Emby Plugin device to your network broadcast address.")
@@ -1259,7 +1267,7 @@ function actionSessionResumeMedia( pdev, restart )
                 ea, nil, nil, server )
             if ok then
                 L("%1 (%2) ResumeMedia OK, ItemId=%3 StartPositionTicks=%4",
-                    luup.devices[pdev].description, pdev, state[1], 
+                    luup.devices[pdev].description, pdev, state[1],
                     restart and "restart" or state[2])
                 scheduleDelay( tostring(server), 2 )
                 return true
@@ -1539,7 +1547,7 @@ local function plugin_runOnce( pdev )
         initVar( "Enabled", "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "DiscoveryBroadcast", "", pdev, MYSID )
-        
+
         luup.attr_set('category_num', 1, pdev)
 
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
@@ -1552,7 +1560,7 @@ local function plugin_runOnce( pdev )
     if s ~= _CONFIGVERSION then
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
     end
-    
+
     if s < 000004 then
         deferClear = true
     end
@@ -1633,6 +1641,7 @@ function startPlugin( pdev )
 
     -- More inits
     if not isEnabled( pdev ) then
+        clearChildren( pdev )
         gatewayStatus("DISABLED")
         return true, "Disabled", _PLUGIN_NAME
     end
@@ -1661,6 +1670,12 @@ function taskTickCallback(p)
     if stepStamp ~= runStamp then
         D( "taskTickCallback() stamp mismatch (got %1, expecting %2), newer thread running. Bye!",
             stepStamp, runStamp )
+        return
+    end
+
+    if not isEnabled( pluginDevice ) then
+        clearChildren( pluginDevice )
+        gatewayStatus( "DISABLED" )
         return
     end
 
@@ -1848,7 +1863,7 @@ function handleLuupRequest( lul_request, lul_parameters, lul_outputformat )
             end
         end
         return alt_json_encode( st ), "application/json"
-        
+
     else
         error("Not implemented: " .. action)
     end
