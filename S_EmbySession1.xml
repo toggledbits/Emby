@@ -73,7 +73,7 @@
             <name>PlayingItemId</name>
             <dataType>string</dataType>
         </stateVariable>
-        <stateVariable sendEvents="yes">
+        <stateVariable sendEvents="no">
             <name>PlayingItemRuntime</name>
             <dataType>r4</dataType>
         </stateVariable>
@@ -164,10 +164,46 @@
         <action>
             <!-- Toggle pause state -->
             <name>PlayPause</name>
+            <argumentList/>
+        </action>
+        <action>
+            <name>ViewMedia</name>
+            <argumentList>
+                <argument>
+                   <name>Id</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <optional/>
+                </argument>
+                <argument>
+                   <name>Title</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <optional/>
+                </argument>
+                <argument>
+                   <name>MediaType</name>
+                   <direction>in</direction>
+                   <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
+                   <optional/>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <name>ResumeMedia</name>
+            <argumentList>
+                <argument>
+                    <name>Restart</name>
+                    <direction>in</direction>
+                    <relatedStateVariable>bool_arg</relatedStateVariable>
+                    <optional/>
+                </argument>
+            </argumentList>
         </action>
         <action>
             <!-- Refresh data from server -->
             <name>Refresh</name>
+            <argumentList/>
         </action>
         <action>
             <!-- Set volume 0-100 -->
@@ -177,6 +213,17 @@
                    <name>Volume</name>
                    <direction>in</direction>
                    <relatedStateVariable>VolumePercent</relatedStateVariable>
+                </argument>
+            </argumentList>
+        </action>
+        <action>
+            <name>GetVolume</name>
+            <argumentList>
+                <argument>
+                   <name>Volume</name>
+                   <direction>out</direction>
+                   <relatedStateVariable>VolumePercent</relatedStateVariable>
+                   <retval/>
                 </argument>
             </argumentList>
         </action>
