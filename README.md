@@ -43,11 +43,7 @@ I discovered early on that the Emby remote control API's `PreviousTrack` and `Ne
 
 ### Hiding Sessions and Reducing Device UI Clutter
 
-Emby servers can end up having a lot of clients, and the presentation of all of those clients as child devices in the Vera UI can lead to quite a bit of clutter. The visibility of individual sessions can be controlled via the "Sessions" tab on the Emby Server device. This lets you force hide or show a session, overriding the automatic hiding actions of the plugin if those features are enabled.
-
-The plugin can also automatically hide offline sessions if you set the `HideOffline` state variable on the Emby server device to 1. If the device is set to explicitly "show" in the "Sessions" tab of the Emby server, that overrides this features.
-
-The plugin can aggressively hide sessions by showing only active (playing) sessions in the UI if you set the `HideIdle` state variable on the Emby server device to 1. The session's specific visibility, as set on the server's "Sessions" tab, will override this.
+Emby servers can end up having a lot of clients, and the presentation of all of those clients as child devices in the Vera UI can lead to quite a bit of clutter. Two options for automatically hiding sessions are available: hide offline sessions, and hide idle sessions. The visibility of individual sessions can be controlled via the "Sessions" tab on the Emby Server device. This lets you force hide or show a session, overriding the automatic hiding actions of the plugin if those features are enabled.
 
 ## Actions
 
