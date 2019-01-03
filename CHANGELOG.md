@@ -1,6 +1,6 @@
 # Change Log
 
-## Version 0.4 (development)
+## Version 1.0 (released -- first general release)
 
 * Add "Sessions" tab on server control panel for controlling server and session visibility settings.
 * Add "ResumeMedia" action to restart play of last media item after a stop. Note that this DOES NOT resume any following items that may have been in the queue. Emby has no persistent queue or anonymous playlist that can be resumed.
