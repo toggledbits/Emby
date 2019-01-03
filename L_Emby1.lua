@@ -715,6 +715,9 @@ local function inventorySessions( server )
             clearPlayingState( v )
             setVar( SESSIONSID, "Offline", 1, v )
             setVar( SESSIONSID, "DisplayStatus", "Offline", v )
+            if getVarNumeric( "HideOffline", 0, server, SERVERSID ) ~= 0 then
+                luup.attr_set( "invisible", "1", v )
+            end
         end
 
         -- If we have newly discovered sessions, add them as children (causes Luup restart)
@@ -734,6 +737,8 @@ local function inventorySessions( server )
                     false )
             end
             -- Finished
+            L({level=2,msg="New sessions have been created for %1 (%2), a Luup reload will occur!"},
+                luup.devices[server].description, server)
             luup.chdev.sync( pluginDevice, ptr ) -- should reload
         end
     end
@@ -813,8 +818,12 @@ local function startServer( server )
         -- Launch!
         addEvent{ dev=server, event="start", message="Successful startup" }
         luup.set_failure( 0, server )
-        setVar( SERVERSID, "Message", "Taking session inventory...",server )
-        inventorySessions( server )
+        if getVarNumeric( "StartupInventory", 1, pluginDevice, MYSID ) ~= 0 then
+            setVar( SERVERSID, "Message", "Taking session inventory...", server )
+            inventorySessions( server )
+        else
+            scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 5 )
+        end
         setVar( SERVERSID, "Message", okmsg, server )
     end
 end
@@ -1545,6 +1554,7 @@ local function plugin_runOnce( pdev )
         L("First run, setting up new plugin instance...")
         initVar( "Message", "", pdev, MYSID )
         initVar( "Enabled", "1", pdev, MYSID )
+        initVar( "StartupInventory", "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
         initVar( "DiscoveryBroadcast", "", pdev, MYSID )
 

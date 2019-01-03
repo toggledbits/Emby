@@ -195,10 +195,21 @@
 		},
 		{
 			"Label": {
+				"lang_tag": "emby_sessions",
+				"text": "Sessions"
+			},
+			"Position": 1,
+			"TopNavigationTab": 1,
+			"TabType": "javascript",
+			"ScriptName": "J_EmbyServer1_UI7.js",
+			"Function": "EmbyServer.doSessions"
+		},
+		{
+			"Label": {
 				"lang_tag": "ui7_advanced",
 				"text": "Advanced"
 			},
-			"Position": 1,
+			"Position": 2,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "advanced_device"
@@ -208,7 +219,7 @@
 				"lang_tag": "ui7_logs",
 				"text": "Logs"
 			},
-			"Position": 2,
+			"Position": 3,
 			"TabType": "javascript",
 			"ScriptName": "shared.js",
 			"Function": "device_logs"
