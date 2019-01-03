@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "0.4develop-190102"
+local _PLUGIN_VERSION = "1.0"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
-local _CONFIGVERSION = 000004
+local _CONFIGVERSION = 000100
 
 local math = require "math"
 local string = require "string"
@@ -1571,7 +1571,7 @@ local function plugin_runOnce( pdev )
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
     end
 
-    if s < 000004 then
+    if s < 000100 then
         deferClear = true
     end
 end
