@@ -11,16 +11,15 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "0.3develop-181231"
+local _PLUGIN_VERSION = "0.4develop-190102"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
-local _CONFIGVERSION = 000001
+local _CONFIGVERSION = 000004
 
 local math = require "math"
 local string = require "string"
 local socket = require "socket"
 local http = require "socket.http"
 local ltn12 = require "ltn12"
-local bit = require "bit"
 local json = require "dkjson"
 
 local MYSID = "urn:toggledbits-com:serviceId:Emby1"
@@ -39,6 +38,7 @@ local runStamp = 0
 local pluginDevice = 0
 local isALTUI = false
 local isOpenLuup = false
+local deferClear = false
 
 local DISCOVERYPERIOD = 15
 
@@ -105,7 +105,7 @@ end
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
     if isOpenLuup then
-        return false
+        return true
     end
     if luup.version_branch == 1 and luup.version_major == 7 then
         if ui7Check == "" then
@@ -158,8 +158,8 @@ end
 
 -- Initialize a variable if it does not already exist.
 local function initVar( name, dflt, dev, sid )
-    assert( dev ~= nil )
-    assert( sid ~= nil )
+    assert( dev ~= nil, "initVar requires dev" )
+    assert( sid ~= nil, "initVar requires SID for "..name )
     local currVal = luup.variable_get( sid, name, dev )
     if currVal == nil then
         luup.variable_set( sid, name, tostring(dflt), dev )
@@ -449,6 +449,7 @@ end
 local function initSession( sess )
     initVar( "Server", "0", sess, SESSIONSID )
     initVar( "Offline", "1", sess, SESSIONSID )
+    initVar( "Visibility", "auto", sess, SESSIONSID )
     initVar( "DeviceId", "", sess, SESSIONSID )
     initVar( "DeviceName", "", sess, SESSIONSID )
     initVar( "Client", "", sess, SESSIONSID )
@@ -456,8 +457,8 @@ local function initSession( sess )
     initVar( "VolumePercent", "100", sess, SESSIONSID )
     initVar( "DisplayPosition", "", sess, SESSIONSID )
     initVar( "Mute", "0", sess, "urn:micasaverde-com:serviceId:Volume1" )
-    initVar( "SmartVolume", "", sess, SESSIONSID )
-    initVar( "SmartMute", "", sess, SESSIONSID )
+    initVar( "SmartVolume", "0", sess, SESSIONSID )
+    initVar( "SmartMute", "0", sess, SESSIONSID )
     initVar( "PlayingItemId", "", sess, SESSIONSID )
     initVar( "PlayingItemType", "", sess, SESSIONSID )
     initVar( "DisplayStatus", "", sess, SESSIONSID )
@@ -499,7 +500,7 @@ local function updateSession( sdata, session, server )
     setVar( SESSIONSID, "Client", sdata.Client, session )
     setVar( SESSIONSID, "LastActivity", sdata.LastActivityDate, session )
 
-    D("updateSession() %1 state is %2", sdata.PlayState)
+    D("updateSession() %1 name %2 (%3) PlayState %4", session, sdata.DeviceName, sdata.Client, sdata.PlayState)
     if sdata.PlayState then
         setVar( SESSIONSID, "VolumePercent", sdata.PlayState.VolumeLevel or "", session )
         setVar( "urn:micasaverde-com:serviceId:Volume1", "Mute", sdata.PlayState.IsMuted and 1 or 0, session )
@@ -520,7 +521,7 @@ local function updateSession( sdata, session, server )
     end
 
     if sdata.NowPlayingItem then
-        D("updateSession() %1 playing %2", sdata.DeviceName, sdata.NowPlayingItem.Id)
+        D("updateSession() %1 playing %2", sdata.DeviceName, sdata.NowPlayingItem)
         setVar( SESSIONSID, "PlayingItemId", sdata.NowPlayingItem.Id, session )
         setVar( SESSIONSID, "PlayingItemType", sdata.NowPlayingItem.Type, session )
         setVar( SESSIONSID, "PlayingItemMediaType", sdata.NowPlayingItem.MediaType, session )
@@ -528,7 +529,7 @@ local function updateSession( sdata, session, server )
         setVar( SESSIONSID, "PlayingItemArtist", sdata.NowPlayingItem.AlbumArtist, session )
         setVar( SESSIONSID, "PlayingItemAlbumId", sdata.NowPlayingItem.AlbumId, session )
         setVar( SESSIONSID, "PlayingItemAlbum", sdata.NowPlayingItem.Album, session )
-
+        
         local status = sdata.NowPlayingItem.Name
         if sdata.NowPlayingItem.MediaType == "Audio" then
             status = status .. " (" .. (sdata.NowPlayingItem.Album or "?")
@@ -557,6 +558,7 @@ local function updateSession( sdata, session, server )
             local dp = string.format( "%02d:%02d / %02d:%02d", math.floor( pos / 60 ), math.floor( pos ) % 60,
                 math.floor( runtime / 60 ), math.floor( runtime ) % 60 )
             setVar( SESSIONSID, "DisplayPosition", dp, session )
+            setVar( SESSIONSID, "ResumePoint", sdata.NowPlayingItem.Id .. "," .. (sdata.PlayState.PositionTicks or 0), session )
         end
     else
         D("updateSession() %1 not playing", sdata.DeviceName)
@@ -608,7 +610,15 @@ local function updateSessions( server, taskid )
 -- luup.log(json.encode(sess),2)
                     childSessions[ sess.Id  ] = nil
                     updateSession( sess, child, server )
-                    anyPlaying = anyPlaying or (sess.NowPlayingItem ~= nil)
+                    anyPlaying = anyPlaying or ( sess.NowPlayingItem ~= nil )
+                    local show = luup.variable_get( SESSIONSID, "Visibility", child ) or ""
+                    if string.find(":show:hide:", show) then
+                        luup.attr_set( "invisible", ( show == "hide" ) and "1" or "0", child )
+                    elseif getVarNumeric( "HideIdle", 0, server, SERVERSID ) ~= 0 then
+                        luup.attr_set( "invisible", ( sess.NowPlayingItem == nil ) and "1" or "0", child )
+                    else
+                        luup.attr_set( "invisible", "0", child )
+                    end
                 end
             end
         end
@@ -617,6 +627,14 @@ local function updateSessions( server, taskid )
                 v, (luup.devices[v] or {}).description)
             clearPlayingState( v )
             setVar( SESSIONSID, "DisplayStatus", "Offline", v )
+            local show = luup.variable_get( SESSIONSID, "Visibility",  v ) or ""
+            if string.find(":show:hide:", show) then
+                luup.attr_set( "invisible", ( show == "hide" ) and "1" or "0", v )
+            elseif getVarNumeric( "HideOffline", 0, server, SERVERSID ) ~= 0 then
+                luup.attr_set( "invisible", "1", v )
+            else
+                luup.attr_set( "invisible", "0", v )
+            end
         end
     end
 
@@ -635,7 +653,7 @@ end
 
 -- Inventory sessions using local server request
 local function inventorySessions( server )
-    local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
+    local ok, data, httpstat = serverRequest( "GET", "/Sessions", { ActiveWithinSeconds=960 }, nil, nil, server )
     if not ok then
         D("inventorySessions() failed session query for %1, will retry...", server)
         luup.set_failure( 1, server )
@@ -727,6 +745,8 @@ local function initServer( server )
     initVar( "SessionUpdateIntervalPlaying", "", server, SERVERSID )
     initVar( "SmartSkipDefault", "", server, SERVERSID )
     initVar( "SmartSkipGrace", "", server, SERVERSID )
+    initVar( "HideOffline", "0", server, SERVERSID )
+    initVar( "HideIdle", "0", server, SERVERSID )
 end
 
 -- Start server
@@ -857,6 +877,11 @@ local function getSystemIP4BCast( dev )
     local broadcast = luup.variable_get( MYSID, "DiscoveryBroadcast", dev ) or ""
     if broadcast ~= "" then
         return broadcast
+    end
+    
+    if isOpenLuup then
+        gatewayStatus( "openLuup must set DiscoveryBroadcast first" )
+        error("You must set DiscoveryBroadcast in the Emby Plugin device to your network broadcast address.")
     end
 
     -- Do it the hard way.
@@ -1121,6 +1146,7 @@ function actionSessionPlayCommand( pdev, actionpath, args )
     if ok then
         scheduleDelay( tostring(server), 2 )
     end
+    return ok
 end
 
 function actionSessionMessage( pdev, message, title, timeout )
@@ -1131,6 +1157,17 @@ function actionSessionMessage( pdev, message, title, timeout )
     local params = { Header=title or "", Text=message or "" }
     if (timeout or "") ~= "" then params.TimeoutMs = timeout end
     local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, args, server )
+    return ok
+end
+
+function actionSessionViewMedia( pdev, id, title, mediatype )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local reqpath = "/Sessions/" .. sess .. "/Viewing"
+    local params = { ItemId=id, ItemName=title, ItemType=mediatype }
+    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, args, server )
+    return ok
 end
 
 function actionSessionRefresh( pdev )
@@ -1190,7 +1227,7 @@ function actionSessionPlayMedia( pdev, argv )
         for _,item in ipairs( data.Items or {} ) do
             table.insert( il, item.Id )
         end
-        L("%1 (%2) PlayMedia action search found %3", luup.devices[pdev].description, pdev, data.TotalRecordCount or #il)
+        L("%1 (%2) PlayMedia found %3", luup.devices[pdev].description, pdev, data.TotalRecordCount or #il)
         ids = table.concat( il, "," )
     end
     local cmd = argv.PlayCommand or "PlayNow"
@@ -1198,7 +1235,46 @@ function actionSessionPlayMedia( pdev, argv )
     local ea = { ItemIds=ids, PlayCommand=cmd }
     local ok, data, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
         ea, nil, nil, server )
+    if ok then
+        scheduleDelay( tostring(server), 2 )
+    else
+        L({level=2,msg="%1 (%2) PlayMedia play request failed (%3)"},
+            luup.devices[pdev].description, pdev, httpstat)
+    end
     return ok
+end
+
+function actionSessionResumeMedia( pdev, restart )
+    assert(luup.devices[pdev].device_type==SESSIONTYPE)
+    local sess = luup.devices[pdev].id
+    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+    local state = luup.variable_get( SESSIONSID, "TransportState", pdev ) or ""
+    if state == "STOPPED" then
+        state = luup.variable_get( SESSIONSID, "ResumePoint", pdev ) or ""
+        state = split( state )
+        if #state == 2 then
+            local ea = { ItemIds=state[1], PlayCommand="PlayNow" }
+            if not restart then ea.StartPositionTicks = tonumber( state[2] ) or 0 end
+            local ok, data, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
+                ea, nil, nil, server )
+            if ok then
+                L("%1 (%2) ResumeMedia OK, ItemId=%3 StartPositionTicks=%4",
+                    luup.devices[pdev].description, pdev, state[1], 
+                    restart and "restart" or state[2])
+                scheduleDelay( tostring(server), 2 )
+                return true
+            end
+            L({level=2,msg="%1 (%2) ResumeMedia server request failed (%3)"},
+                luup.devices[pdev].description, pdev, httpstat)
+        else
+            L({level=2,msg="%1 (%2) can't ResumeMedia, no checkpoint."},
+                luup.devices[pdev].description, pdev )
+        end
+    else
+        L({level=2,msg="%1 (%2) can't ResumeMedia, already playing (%3)"},
+            luup.devices[pdev].description, pdev, state)
+    end
+    return false
 end
 
 --[[ "SmartSkip". The Emby RemoteControl API has NextTrack/PreviousTrack, and
@@ -1273,22 +1349,24 @@ function actionSessionSmartMute( pdev, toggle, state )
     D("actionSessionSmartMute(%1,%2,%3)", pdev, toggle, state)
     assert(luup.devices[pdev].device_type == SESSIONTYPE) -- must be Emby gateway
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
-    local smc = luup.variable_get( SESSIONSID, "SmartMute", pdev ) or ""
+    local smc = string.lower( luup.variable_get( SESSIONSID, "SmartMute", pdev ) or "" )
     local mute = getVarNumeric( "Mute", 0, pdev, "urn:micasaverde-com:serviceId:Volume1" )
-    if smc == "" then
+    if smc == "" or string.find( ":default:0:", smc ) then
         -- SmartMute default: figure out what works.
         local cmdMute = isSessionCommandSupported( "ToggleMute", pdev ) or ( isSessionCommandSupported( "Mute", pdev ) and isSessionCommandSupported( "Unmute", pdev ) )
         if not cmdMute then
             -- Don't have ToggleMute or Mute/Unmute pair.
             if isSessionCommandSupported( "SetVolume", pdev ) then
-                smc = "1"
+                smc = "volume"
             else
                 smc = "pause"
             end
+        else
+            smc = "command"
         end
         D("actionSessionSmartMute() determined best mute method is %1", smc)
     end
-    if smc:lower() == "pause" then
+    if smc == "pause" then
         if toggle then
             local ts = luup.variable_get( SESSIONSID, "TransportState", pdev ) or "STOPPED"
             state = not (ts == "PAUSED")
@@ -1296,7 +1374,7 @@ function actionSessionSmartMute( pdev, toggle, state )
         D("actionSessionSmartMute() play/pause mute, target mute=%1", state)
         -- Pause/unpause based on state
         return actionSessionPlayCommand( pdev, state and "/Pause" or "/Unpause" )
-    elseif smc ~= "" and smc ~= "0" then
+    elseif smc == "volume" or ( smc ~= "" and smc ~= "0" ) then
         -- Volume control
         if not isSessionCommandSupported( "SetVolume", pdev ) then
             L({level=2,msg="%1 (%2) does not support SetVolume; try \"pause\" SmartMute configuration."},
@@ -1371,6 +1449,10 @@ end
 
 -- Run Emby discovery (UDP broadcast port 7359)
 function jobRunDiscovery( pdev )
+    if isOpenLuup then
+        gatewayStatus( "UDP discovery not available on openLuup; use IP discovery" )
+        return 2,0
+    end
     launchUDPDiscovery( pdev )
     return 4,0
 end
@@ -1456,7 +1538,8 @@ local function plugin_runOnce( pdev )
         initVar( "Message", "", pdev, MYSID )
         initVar( "Enabled", "1", pdev, MYSID )
         initVar( "DebugMode", 0, pdev, MYSID )
-
+        initVar( "DiscoveryBroadcast", "", pdev, MYSID )
+        
         luup.attr_set('category_num', 1, pdev)
 
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
@@ -1469,6 +1552,10 @@ local function plugin_runOnce( pdev )
     if s ~= _CONFIGVERSION then
         luup.variable_set( MYSID, "Version", _CONFIGVERSION, pdev )
     end
+    
+    if s < 000004 then
+        deferClear = true
+    end
 end
 
 -- Tick handler for master device
@@ -1478,7 +1565,11 @@ local function masterTick(pdev,taskid)
     -- Set default time for next master tick
     local nextTick = math.floor( os.time() / 60 + 1 ) * 60
 
-    -- Do master tick work here (dispatch)
+    -- Do master tick work here
+    if deferClear then
+        deferClear = false
+        luup.call_action( MYSID, "Clear1", {}, pdev )
+    end
 
     -- Schedule next master tick.
     scheduleTick( taskid, nextTick )

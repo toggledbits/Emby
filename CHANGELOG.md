@@ -9,6 +9,13 @@ As of this time, the following issues are known and awaiting some kind of resolu
 * Emby detects some DLNA devices but doesn't control or update them unless the UPnP proxy is enabled on the network (e.g. Sonos); this is a local configuration issue combined with an Emby server requirement, not a plugin bug.
 * I've decided not to do a media browser, at least for the moment. This plugin is intended for control and automation; it is not intended to be a UI replacement for any client, or an alternate user interface to those Emby clients provide.
 
+## Version 0.4 (development)
+
+* Add "ResumeMedia" action to restart play of last media item after a stop. Note that this DOES NOT resume any following items that may have been in the queue. Emby has no persistent queue or anonymous playlist that can be resumed.
+* Add "ViewMedia" action for session to force media browsing to the specified media id. Note that currently, while the API requires ID, name (title) and media type (at least, according to swagger), only media id (alone) seems to work, and the other parameters do nothing and/or can be omitted.
+* Add HideOffline and HideIdle to hide offline or idle devices automatically. Set value to 1 to enable this feature.
+* Make inventory query use ActiveWithinSeconds parameter as well, so list is more consistent with updates and fewer "Offline" devices are reported (e.g. aged-out devices that the user hasn't removed from the device list on the server).
+
 ## Version 0.3 (development release 2018-12-31)
 
 * Change list of media types to better match capabilities in PlayMedia action; 
