@@ -42,9 +42,9 @@
         <action>
             <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
             <name>Clear1</name>
-            <run>
+            <job>
                 EmbyPlugin.actionClear1( lul_device )
-            </run>
+            </job>
         </action>
 
         <!-- ACTIONS FOR SERVERS -->
@@ -80,9 +80,8 @@
             <job>
                 if EmbyPlugin.actionSessionPlayMedia( lul_device, lul_settings ) then
                     return 4,0
-                else
-                    return 2,0
                 end
+                return 2,0
             </job>
         </action>
         <action>
@@ -94,11 +93,36 @@
         </action>
         <action>
             <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>ViewMedia</name>
+            <run>
+                return EmbyPlugin.actionSessionViewMedia( lul_device, lul_settings.Id, lul_settings.Title, lul_settings.MediaType )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>ResumeMedia</name>
+            <job>
+                local restart = ( lul_settings.Restart or "0" ) ~= "0"
+                if EmbyPlugin.actionSessionResumeMedia( lul_device, restart ) then
+                    return 4,0
+                end
+                return 2,0
+            </job>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
             <name>SetVolume</name>
             <run>
                 -- See comments in implementation of actionSessionGeneralCommand
                 return EmbyPlugin.actionSessionGeneralCommand( lul_device, nil, 
                     { Name="SetVolume", Arguments={ Volume=tostring(lul_settings.Volume or 100) } } )
+            </run>
+        </action>
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+            <name>GetVolume</name>
+            <run>
+                -- Needs no implementation, based on SCPD
             </run>
         </action>
         <action>
