@@ -9,13 +9,15 @@ The Emby Plugin is the interface for all Emby servers discovered in the network 
 
 The plugin is currently available only from Github. Install by uploading to your Vera, then creating the base Emby Plugin master device (device file D_Emby1.xml and implementation file I_Emby1.xml).
 
-Discovery is used to register the server. Once a server is registered, use the login function on the server device's control panel to get the necessary authentication the plugin needs to access the server.
+Discovery is used to register the server; launch discovery from the plugin device's control panel. Once a server is registered, go into its control panel and use the login functionto get the necessary authentication token the plugin needs to access the server.
 
 ## Caveats
 
 First and foremost, keep in mind that this plugin is to be used as an automation interface to Emby, and not as a replacement UI for clients. It's meant to do things like mute your player when the doorbell rings, or start playing music when you run a scene, for example. Although the plugin displays activity information for known clients as reported by the Emby server, it is neither possible nor practical for that information to be up-to-the-second accurate and identical to that displayed on the client itself. In fact, when an idle client begins playing media, it may take up to a minute before the plugin first reflects this state change and starts updating more frequently.
 
 Emby clients are not required to implement every action, and many don't. Currently, mute doesn't work on Android. Many DLNA players will be discovered by the Emby server and thus made visible in this plugin, but are not controllable (even though Emby's flag for the session says remote control is available). If something works on one player but not another, that's probably a client issue, not a plugin issue, and I will not likely spend a lot of time chasing it.
+
+Emby does not currently maintain an accessible "queue" of items a client is going to play. There is a queue, but it exists only during play, and is not accessible through the Emby API (the author has said he plans to address this in future). That means, for the moment, that you can't simply send a "Play" command to an Emby client and have it pick up from where it was previously stopped. You can start playing from a paused state, no problem, but from a full stop/idle player, there's no history stored to use as a starting point. The Emby plugin makes some attempt to address this limitation by tracking the one last-known media item and providing an action to resume play of that item, but if it was one of many in a long list, there's no way for the plugin to know that and the remainder of the former list cannot be played.
 
 ## Special Features
 
@@ -27,17 +29,25 @@ The Emby remote control API's volume up and down functions rely on the client to
 
 ### SmartMute
 
-Not every Emby client implements "ToggleMute", so the plugin makes some effort to make mute happen by other means. These are mechanisms used, in order of preference:
-* If the server reports that the client supports the "ToggleMute" API commands, we'll use that;
+Not every Emby client implements the Emby remote control API's "ToggleMute" command, so the plugin makes some effort to make mute happen by other means. These are the mechanisms used, in order of preference, chosen based on the capabilities advertised:
+* If the server reports that the client supports the "ToggleMute" API command, we'll use that;
 * Otherwise, if the client supports the "Mute" and "Unmute" API commands, we'll use those;
-* Otherwise, if the client supports direct control of volume, we'll toggle between 0% volume and whatever it previously was;
+* Otherwise, if the client supports direct control of volume, we'll toggle between the last reported volume level and 0%;
 * Finally, the plugin will use pause/unpause.
 
-Several clients report that they can ToggleMute, but the command has no effect (I'm looking at you, Android client version 3.0.28). If you find that you cannot mute, it's likely that the client (or the Emby server) is mis-reporting its capabilities (or there's simply a bug in that version of the client). You can force the plugin to use a different method by setting the "SmartMute" state variable to "volume" or "pause", for direct volume control or pause/unpause behavior, respectively. The default is "auto".
+Several clients report that they support "ToggleMute," but the command has no effect (I'm looking at you, Android client version 3.0.28). If you find that you cannot mute, it's likely that the client (or the Emby server) is mis-reporting its capabilities (or there's simply a bug in that version of the client). You can force the plugin to use a different method by setting the "SmartMute" state variable to "volume" or "pause", for direct volume control or pause/unpause behavior, respectively. The default is "auto".
 
 ### SmartSkip
 
-I discovered early on that the Emby remote control API's `PreviousTrack` and `NextTrack` commands work for audio, but do nothing when a movie is playing. Moving around a movie makes a bit of sense, so, if a video is playing and it has chapter information embedded in its media file and reported by the server, the plugin will use that chapter information to seek to the previous or next chapter relative to the current play position. If there is no chapter data in the video, a 30-second skip backward or forward will occur.
+I discovered early on that the Emby remote control API's `PreviousTrack` and `NextTrack` commands work for audio, but do nothing when a movie is playing. Moving around a movie makes a bit of sense, so, if a video is playing and has chapter information embedded and reported by the server, the plugin will use that chapter information to seek to the previous or next chapter relative to the current play position. If there is no chapter data in the video, a 30-second skip backward or forward will occur.
+
+### Hiding Sessions and Reducing Device UI Clutter
+
+Emby servers can end up having a lot of clients, and the presentation of all of those clients as child devices in the Vera UI can lead to quite a bit of clutter. The visibility of individual sessions can be controlled via the "Sessions" tab on the Emby Server device. This lets you force hide or show a session, overriding the automatic hiding actions of the plugin if those features are enabled.
+
+The plugin can also automatically hide offline sessions if you set the `HideOffline` state variable on the Emby server device to 1. If the device is set to explicitly "show" in the "Sessions" tab of the Emby server, that overrides this features.
+
+The plugin can aggressively hide sessions by showing only active (playing) sessions in the UI if you set the `HideIdle` state variable on the Emby server device to 1. The session's specific visibility, as set on the server's "Sessions" tab, will override this.
 
 ## Actions
 
@@ -49,39 +59,41 @@ There is a small set of actions you can perform on the Emby Plugin itself (the m
 
 #### RunDiscovery
 
-The `RunDiscovery` action starts a UDP discovery job. It returns no values and reports no results.
+The `RunDiscovery` action starts a UDP discovery job. It returns no values and reports no results. If new servers are discovered, child devices are added for them, and Luup will reload.
 
 #### DiscoverIP
 
-The `DiscoverIP` action takes a single parameter: `IPAddress`. The plugin will attempt to contact the Emby server at the given IP address and register it, if it is valid.
+The `DiscoverIP` action takes a single parameter: `IPAddress`. The plugin will attempt to contact the Emby server at the given IP address and register it, if it is valid. This is an alternative to UDP discovery, which is not supported currently on openLuup.
 
 ### Emby Server Actions
 
-The actions for servers live in the `urn:toggledbits-com:serviceId:EmbyServer1` service.
+The actions for servers live in the `urn:toggledbits-com:serviceId:EmbyServer1` service and apply to Emby server devices.
 
 #### Authenticate
 
-The `Authenticate` action either logs in and asks the server to generate an API key, or assigns a user-created API key to the server device. 
+The `Authenticate` action either logs in with a given username and password (using parameters `Username` and `Password`) and has the server generate an API key, or assigns a user-created API key (provided in the `APIKey` parameter) to the server device. 
 
-To log in as a user, create a username and password on your Emby server for the plugin to use, or use an existing username. To create an API key, you go to the "Security" tab in the Emby server's web interface, and generate an API key.
+To log in as a user, you can create a username and password on your Emby server for the plugin to use, or use an existing username. To create an API key, you go to the "Security" tab in the Emby server's web interface.
 
 Login or key assignment only needs to be done once. The key is valid until revoked, so future connections by the plugin to the server can use the existing key until you revoke it (or change/delete the username/password).
 
 #### Inventory
 
-The `Inventory` action causes the plugin to re-inventory the Emby server and find new active sessions. By default, inventory is only done at startup. Because sessions are Luup child devices, creating them requires a Luup reload, so calling this action will not return if a new client session is found and added.
+The `Inventory` action causes the plugin to re-inventory the Emby server and find new active sessions. By default, inventory is only done at Luup startup. Because sessions are Luup child devices, creating them requires a Luup reload, so calling this action will not return if a new client session is found and added.
+
+Startup inventory can be disable by setting the `StartupInventory` state variable to 0.
 
 ### Emby Session Actions
 
 Most users will be primarily interested in manipulating sessions. This is where you can have your home theater PC pause and display a message when the doorbell rings, or launch a playlist as part of a scene.
 
 In addition to the actions defined by its own service (described below), sessions implement the following actions of other services:
-* In `urn:micasaverde-com:serviceId:MediaNavigation1`:
-  * The `Pause` action will pause play, and the `Play` action will resume play. Note that current Emby versions to not have the media queue of the clients available through the API, so the `Play` action cannot be used to resume playing after issuing a `Stop` action to a session.
+* In `urn:micasaverde-com:serviceId:MediaNavigation1`
+  * The `Pause` action will pause play, and the `Play` action will resume play previously paused. Note that current Emby versions to not have the media queue of the clients available through the API, so the `Play` action cannot be used to resume playing after issuing a `Stop` action to a session.
   * The `Stop` action will stop (completely) whatever media is playing on the client. There is no resume function, currently (see comment above).
-  * The `SkipDown` and `SkipUp` actions go to the next and previous, respectively, items in the session's queue. The 'ChapterDown` and `ChapterUp` actions are synonyms for `SkipUp` and `SkipDown` respectively. Note the (intentional) up/down reversal here. `ChapterDown` means previous because "down" in chapter context means reduce the current chapter number, while `SkipDown` means "next" because its perspective is that of a playlist, where moving down the list means going to the next item. Also, see the description of "SmartSkip" above.
-* In service `urn:micasaverde-com:serviceId:Volume1`:
-  * Actions `Up` and `Down` raise and lower (respectively) the volume of the Emby client. These actions take no parameters. Note that this does not necessarily mean the volume level of the device. It is possible for the client to be at 100% volume, while the device on which the client is playing is muted (e.g. Android). Emby has no control of the device volume. Since clients can be implemented by third parties, not all of them follow the Emby specs exactly, or do sensible things with volume. For example, the Android client raises and lowers volume in 1% increments, which is not terribly useful. To get better control on clients with poor semantics, see the "SmartVolume" feature description, above. For direct setting of volume, you can use the `SetVolume` action in the `urn:toggledbits-com:serviceId:EmbySession1` service (described below).
+  * The `SkipDown` and `SkipUp` actions go to the next and previous, respectively, items in the session's queue. The `ChapterDown` and `ChapterUp` actions are synonyms for `SkipUp` and `SkipDown` respectively. Note the (intentional) up/down reversal here. `ChapterDown` means previous because "down" in chapter context means reduce the current chapter number, while `SkipDown` means "next" because its perspective is that of a playlist, where moving "down" the list means going to the next item. Also, see the description of "SmartSkip" above.
+* In service `urn:micasaverde-com:serviceId:Volume1`
+  * Actions `Up` and `Down` raise and lower (respectively) the volume of the Emby client. These actions take no parameters. Note that this often controls the volume level of the Emby *client* and not that of the *device* on which the client is running. It is possible for the client to be at 100% volume, while the device (e.g. Android phone or tablet) is muted at the system level. Emby may not have control of the device volume. Also, see the discussion of "SmartVolume" above under "Special Features". To set an absolute volume level, you can use the `SetVolume` action in the `urn:toggledbits-com:serviceId:EmbySession1` service (described below).
   * Action `Mute` mutes or unmutes the client (toggles). The current muting state can be found by examining the `Mute` state variable for the session in this Volume1 service).
   
 The following are the actions defined for sessions by the `urn:toggledbits-com:serviceId:EmbySession1` service:
@@ -95,15 +107,17 @@ The `PlayMedia` action launches play of a media item (or several). The action pe
 * 'Limit` (optional) - If specified, the maximum number of matching items to play (if not specified or less than 1, 25 is used);
 * 'PlayCommand' (optional) - If specified, must be "PlayNow", "PlayNext", or "PlayLast" (default is PlayNow). This controls how the items are added to the session's queue; PlayNow replaces the current queue; PlayNext inserts the items after the current playing item; PlayLast appends the items to the queue.
 
-The most reliable way to play a single media item is to use its ID. To find the item's ID, browse to it in the web interface. Then look at the URL--the ID is a parameter on the URL and easily discerned.
+`luup.call_action( "urn:toggledbits-com:serviceId:EmbySession1", "PlayMedia", { Title="Master of Puppets", MediaType="Audio" }, sessionDeviceNum )`
+
+The most reliable/predictable way to play a single media item is to use its ID. To find the item's ID, browse to it in the web interface. Then look at the URL--the ID is a parameter on the URL and easily discerned.
 
 #### PlayPause
 
-Because the `MediaNavigation1` service has separate `Play` and `Pause` actions, the `PlayPause` action in this service is provided as a convenience action to toggle the current pause state. It takes no parameters.
+Because the `MediaNavigation1` service has separate `Play` and `Pause` actions but no toggle, the `PlayPause` action in this service provides that feature. It takes no parameters.
 
 #### ViewMedia
 
-The `ViewMedia` action moves the client's user interface to the given media item. The following parameters are used:
+The `ViewMedia` action moves the client's user interface to the given media item. It does not start play; it just moves the UI. The following parameters are used:
 * `Id` (required if `Title` is not specified) - The media ID (recommended);
 * `Title` (required if `Id` is not specified) - The title of the media item;
 * `MediaType` (optional) - The Emby media type of the item (only used when Title is given and Id is not), to help narrow the search result.
@@ -121,7 +135,7 @@ The `SetVolume` action takes a single parameter, `Volume` (0-100), and sets the 
 The `Message` action causes a message to display on the Emby client (if active). Parameters:
 * `Text` (required) - Text of the message to display;
 * `Header` (optional) - Text of the dialog box title (only shows when `TimeoutMs` is not specified;
-* `TimeoutMs` (optional) - Timeout for the message display. **CAUTION** The name of this parameter (same as that in the Emby API) leads one to believe that the value is expressed in milliseconds, but that does not appear to be case (perhaps the "Ms" stands for "message"?). If given, the dialog box will appear without a header and without an "OK" button to clear it, and will display for the given number of seconds. If not provided, a modal dialog with the header text and an "OK" button will appear.
+* `TimeoutMs` (optional) - Timeout for the message display. **CAUTION** The name of this parameter (same as that used in the Emby API) may lead one to believe that the value is expressed in milliseconds, but that does not appear to be case (perhaps the "Ms" stands for "message"?). If given, the dialog box will appear without a header and without an "OK" button to clear it, and will display for the given number of seconds (there is no way to clear it). If `TimeoutMs` is not provided, a modal dialog with the header text and an "OK" button will appear.
 
 #### Refresh
 
