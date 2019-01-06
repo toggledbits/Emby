@@ -31,9 +31,9 @@ var EmbyServer = (function(api, $) {
         var html = '';
         html += '<div class="clearfix">';
         html += '<div id="tbbegging"><em>Find this plugin useful?</em> Please consider a small donation to support this and my other plugins on <a href="https://www.toggledbits.com/donate" target="_blank">my web site</a>. I am grateful for any support you choose to give!</div>';
-        html += '<div id="tbcopyright">Emby Plugin ver 0.4-190103 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
-            ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Emby/blob/master/README.md" target="_blank">online documentation</a>' +
-            ' and <a href="http://forum.micasaverde.com/index.php/topic,103145.0.html" target="_blank">forum thread</a> for support.</div>';
+        html += '<div id="tbcopyright">Emby Plugin ver 1.0 &copy; 2018 <a href="https://www.toggledbits.com/" target="_blank">Patrick H. Rigney</a>,' +
+            ' All Rights Reserved. Please check out the <a href="https://github.com/toggledbits/Emby/" target="_blank">online documentation</a>' +
+            ' and <a href="http://forum.micasaverde.com/index.php/topic,118013.0.html" target="_blank">forum thread</a> for support.</div>';
         return html;
     }
 
@@ -56,7 +56,7 @@ var EmbyServer = (function(api, $) {
     function handleServerOptionChange( ev ) {
         var opt = jQuery( ev.currentTarget );
         var checked = opt.prop( 'checked' );
-        var setting = opt.attr( 'id' ) === "hideidle" ? "HideIdle" : "HideSession";
+        var setting = opt.attr( 'id' ) === "hideidle" ? "HideIdle" : "HideOffline";
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, setting, checked ? "1" : "0" );
     }
 
