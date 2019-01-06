@@ -1,6 +1,6 @@
 --[[
-    L_Emby.lua - Core module for Emby
-    Copyright 2017,2018 Patrick H. Rigney, All Rights Reserved.
+    L_Emby1.lua - Core module for Emby
+    Copyright 2017,2018,2019 Patrick H. Rigney, All Rights Reserved.
     This file is part of Emby. For license information, see LICENSE at https://github.com/toggledbits/Emby
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
@@ -175,7 +175,6 @@ local function setVar( sid, name, val, dev )
     -- D("setVar(%1,%2,%3,%4) old value %5", sid, name, val, dev, s )
     if s ~= val then
         luup.variable_set( sid, name, val, dev )
-        return val
     end
     return s
 end
@@ -567,11 +566,19 @@ local function updateSession( sdata, session, server )
                 math.floor( runtime / 60 ), math.floor( runtime ) % 60 )
             setVar( SESSIONSID, "DisplayPosition", dp, session )
             setVar( SESSIONSID, "ResumePoint", sdata.NowPlayingItem.Id .. "," .. (sdata.PlayState.PositionTicks or 0), session )
+            setVar( SESSIONSID, "ResumeTitle", sdata.NowPlayingItem.Name or "", session )
         end
     else
         D("updateSession() %1 not playing", sdata.DeviceName)
         clearPlayingState( session )
     end
+end
+
+local function isControllableSession( sess )
+    if not sess.SupportsRemoteControl then return false, 1 end
+    local client = tostring( sess.Client or "" ):lower()
+    if client:match( "^vera emby" ) then return false, 2 end
+    return true
 end
 
 local function updateSessions( server, taskid )
@@ -611,7 +618,7 @@ local function updateSessions( server, taskid )
         -- Iterate over response data
         D("updateSessions() server returned %1 sessions", #(data or {}))
         for _,sess in ipairs( data or {} ) do
-            if sess.SupportsRemoteControl then
+            if isControllableSession( sess ) then
                 D("updateSessions() updating session %1 (%2)", sess.DeviceName, sess.Id)
                 local child = childSessions[ sess.Id ]
                 if child then
@@ -627,12 +634,20 @@ local function updateSessions( server, taskid )
                     else
                         luup.attr_set( "invisible", "0", child )
                     end
+                else
+                    L({level=2,msg="Child device not found for session %1 (%2) on %3 (%4), a %5 %6; you may need to run inventory on this server, or the child is not supported."},
+                        sess.Id, sess.DeviceName, luup.devices[server].description, server,
+                        sess.Client, sess.ApplicationVersion)
                 end
             end
         end
         for k,v in pairs( childSessions ) do
             D("updateSessions() clearing offline session %1 (dev #%2 %3)", k,
                 v, (luup.devices[v] or {}).description)
+            if setVar( SESSIONSID, "Offline", 1, v ) ~= "1" then
+                L({level=3,msg="Marking %1 (%2) offline (server return no data for active session request)"},
+                    (luup.devices[v] or {}).description, v)
+            end
             clearPlayingState( v )
             setVar( SESSIONSID, "DisplayStatus", "Offline", v )
             local show = luup.variable_get( SESSIONSID, "Visibility",  v ) or ""
@@ -661,7 +676,8 @@ end
 
 -- Inventory sessions using local server request
 local function inventorySessions( server )
-    local ok, data, httpstat = serverRequest( "GET", "/Sessions", { ActiveWithinSeconds=960 }, nil, nil, server )
+    L("Launching session inventory for %1 (%2)", luup.devices[server].description, server)
+    local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
     if not ok then
         D("inventorySessions() failed session query for %1, will retry...", server)
         luup.set_failure( 1, server )
@@ -673,6 +689,7 @@ local function inventorySessions( server )
                 luup.devices[server].description, server)
             return
         end
+        L({level=2,msg="Server unreachable for session inventory (%1). Scheduling retry."}, httpstat)
         setVar( SERVERSID, "Message", "Unreachable; retrying...", server )
         scheduleDelay( { id=tostring(server), owner=server, info="inventoryretry", func=inventorySessions }, 120 )
         return
@@ -688,19 +705,18 @@ local function inventorySessions( server )
         D("inventorySessions() childSessions=%1", childSessions)
         local newSessions = {}
         for _,sess in ipairs( data or {} ) do
-            local client = tostring( sess.Client or "" ):lower()
-            if client:match( "^vera emby" ) then
-                L("Session %1 (%2) is %3 client, not supported (skipped)",
-                    sess.DeviceName, sess.Id, sess.Client)
-            elseif not sess.SupportsRemoteControl then
-                L("Session %1 (%2) client doesn't support remote control (skipped)",
-                    sess.DeviceName or "", sess.Id)
+            if not isControllableSession( sess ) then
+                L("Session %1 (%2) client %3 version %4, not supported (skipped)",
+                    sess.DeviceName, sess.Id, sess.Client, sess.ApplicationVersion)
             else
-                D("inventorySessions() checking session %1 (%2)", sess.DeviceName, sess.Id)
                 local child = childSessions[ sess.Id ]
                 if not child then
+                    L("New session %1 (%2), client %3 version %4 (will be added)",
+                        sess.DeviceName, sess.Id, sess.Client, sess.ApplicationVersion)
                     table.insert( newSessions, sess )
                 else
+                    L("Existing session %1 (%2), client %3 version %4 (updating)",
+                        sess.DeviceName, sess.Id, sess.Client, sess.ApplicationVersion)
                     childSessions[ sess.Id ] = nil -- remove from map
                     initSession( child )
                     updateSession( sess, child, server )
@@ -710,7 +726,7 @@ local function inventorySessions( server )
 
         -- Anything left in map wasn't returned by query, so assume offline.
         for k,v in pairs( childSessions ) do
-            D("inventorySession() session %1 (dev #%2 %3) missing from server response; marking offline.",
+            L("Session %3 (dev #%2, id %1) missing from server response; marking offline.",
                 k, v, (luup.devices[v] or {}).description)
             clearPlayingState( v )
             setVar( SESSIONSID, "Offline", 1, v )
@@ -721,7 +737,6 @@ local function inventorySessions( server )
         end
 
         -- If we have newly discovered sessions, add them as children (causes Luup restart)
-        -- ??? only at startup?
         if #newSessions > 0 then
             addEvent{ dev=server, event="inventory", new=#newSessions }
             L({level=2,msg="Discovered %1 new sessions on %2 (#%3), adding and restarting..."}, #newSessions,
@@ -1690,7 +1705,7 @@ function taskTickCallback(p)
     end
 
     local now = os.time()
-    local nextTick = now + 60 -- Try to start minute to minute at least
+    local nextTick = nil
     tickTasks._plugin.when = 0
 
     -- Since the tasks can manipulate the tickTasks table, the iterator
