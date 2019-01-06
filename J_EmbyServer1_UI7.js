@@ -56,7 +56,7 @@ var EmbyServer = (function(api, $) {
     function handleServerOptionChange( ev ) {
         var opt = jQuery( ev.currentTarget );
         var checked = opt.prop( 'checked' );
-        var setting = opt.attr( 'id' ) === "hideidle" ? "HideIdle" : "HideSession";
+        var setting = opt.attr( 'id' ) === "hideidle" ? "HideIdle" : "HideOffline";
         api.setDeviceStateVariablePersistent( api.getCpanelDeviceId(), serviceId, setting, checked ? "1" : "0" );
     }
 
