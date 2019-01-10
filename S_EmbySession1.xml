@@ -82,7 +82,7 @@
             <dataType>r4</dataType>
         </stateVariable>
         <stateVariable sendEvents="no">
-            <name>misc_arg</name>
+            <name>A_ARG_TYPE_string</name>
             <dataType>string</dataType>
         </stateVariable>
         <stateVariable sendEvents="no">
@@ -90,7 +90,7 @@
             <dataType>ui4</dataType>
         </stateVariable>
         <stateVariable sendEvents="no">
-            <name>bool_arg</name>
+            <name>A_ARG_TYPE_boolean</name>
             <dataType>boolean</dataType>
         </stateVariable>
         <stateVariable sendEvents="no">
@@ -137,12 +137,12 @@
                 <argument>
                    <name>Id</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
                 <argument>
                    <name>Title</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
                 <argument>
                    <name>MediaType</name>
@@ -172,13 +172,13 @@
                 <argument>
                    <name>Id</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                    <optional/>
                 </argument>
                 <argument>
                    <name>Title</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                    <optional/>
                 </argument>
                 <argument>
@@ -195,7 +195,7 @@
                 <argument>
                     <name>Restart</name>
                     <direction>in</direction>
-                    <relatedStateVariable>bool_arg</relatedStateVariable>
+                    <relatedStateVariable>A_ARG_TYPE_boolean</relatedStateVariable>
                     <optional/>
                 </argument>
             </argumentList>
@@ -234,12 +234,12 @@
                 <argument>
                    <name>Text</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
                 <argument>
                    <name>Header</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
                 <argument>
                    <name>TimeoutMs</name>

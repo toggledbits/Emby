@@ -18,11 +18,11 @@
             <defaultValue>0</defaultValue>
         </stateVariable>
         <stateVariable sendEvents="no">
-            <name>misc_arg</name>
+            <name>A_ARG_TYPE_string</name>
             <dataType>string</dataType>
         </stateVariable>
         <stateVariable sendEvents="no">
-            <name>bool_arg</name>
+            <name>A_ARG_TYPE_boolean</name>
             <dataType>boolean</dataType>
         </stateVariable>
     </serviceStateTable>
@@ -38,7 +38,7 @@
                 <argument>
                    <name>IPAddress</name>
                    <direction>in</direction>
-                   <relatedStateVariable>misc_arg</relatedStateVariable>
+                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
                 </argument>
             </argumentList>
         </action>
