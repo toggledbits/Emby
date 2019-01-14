@@ -88,7 +88,7 @@ var EmbyServer = (function(api, $) {
         for ( var ix=0; ix<(ud.devices || []).length; ++ix ) {
             if ( ud.devices[ix].id_parent == pluginDevice && ud.devices[ix].device_type == "urn:schemas-toggledbits-com:device:EmbySession:1" ) {
                 var devnum = ud.devices[ix].id;
-                
+
                 /* Build row for display */
                 var row = jQuery( '<div class="row" />' );
                 row.attr( 'id', devnum );

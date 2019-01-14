@@ -12,7 +12,7 @@
 
 ## Version 0.3 (development release 2018-12-31)
 
-* Change list of media types to better match capabilities in PlayMedia action; 
+* Change list of media types to better match capabilities in PlayMedia action;
 * Add Inventory action on server to force re-inventory without Luup reload;
 * SmartMute's default will now figure out how to accomplish mute based on what the reported device capabilities are, with first priority given to ToggleMute/Mute/Unmute commands, followed by SetVolume, and last Pause/Unpause.
 * Allow DLNA clients now that we can see them working (not all are responsive--many require a UPnP proxy to be functional);

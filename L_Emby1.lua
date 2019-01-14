@@ -464,7 +464,7 @@ local function initSession( sess )
     initVar( "TransportState", "STOPPED", sess, SESSIONSID )
     initVar( "SmartSkipDefault", "", sess, SESSIONSID )
     initVar( "SmartSkipGrace", "", sess, SESSIONSID )
-    
+
     if getVarNumeric( "Version", 0, sess, SESSIONSID ) < 000101 then
         luup.attr_set( 'category_num', 15, sess )
     end
@@ -780,7 +780,7 @@ local function initServer( server )
     initVar( "SmartSkipGrace", "", server, SERVERSID )
     initVar( "HideOffline", "0", server, SERVERSID )
     initVar( "HideIdle", "0", server, SERVERSID )
-    
+
     if getVarNumeric( "Version", 0, server, SERVERSID ) < 000101 then
         luup.attr_set( 'category_num', 1, server )
     end
