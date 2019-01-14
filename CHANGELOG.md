@@ -1,5 +1,7 @@
 # Change Log
 
+## Version 1.1 (development)
+
 ## Version 1.0 (released -- first general release)
 
 * Add "Sessions" tab on server control panel for controlling server and session visibility settings.
