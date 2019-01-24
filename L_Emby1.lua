@@ -589,7 +589,7 @@ end
 local function updateSessions( server, taskid )
     assert(taskid)
     local anyPlaying = false
-    local ok, data, httpstat = serverRequest( "GET", "/Sessions", { ActiveWithinSeconds=960 }, nil, nil, server )
+    local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
     if not ok then
         luup.set_failure( 1, server )
         if httpstat == 401 then
@@ -1675,7 +1675,13 @@ function startPlugin( pdev )
     plugin_runOnce( pdev )
 
     -- More inits
-    if not isEnabled( pdev ) then
+    local enabled = isEnabled( pdev )
+    for _,d in ipairs( getChildDevices( nil, pdev ) or {} ) do
+        luup.attr_set( 'invisible', enabled and 0 or 1, d )
+    end
+    luup.attr_set( 'invisible', 0, pdev )
+    if not enabled then
+        L{level=2,msg="disabled (see Enabled state variable)"}
         clearChildren( pdev )
         gatewayStatus("DISABLED")
         return true, "Disabled", _PLUGIN_NAME
