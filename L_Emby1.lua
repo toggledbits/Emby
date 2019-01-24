@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "1.0"
+local _PLUGIN_VERSION = "1.1develop"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
-local _CONFIGVERSION = 000100
+local _CONFIGVERSION = 000101
 
 local math = require "math"
 local string = require "string"
@@ -464,6 +464,11 @@ local function initSession( sess )
     initVar( "TransportState", "STOPPED", sess, SESSIONSID )
     initVar( "SmartSkipDefault", "", sess, SESSIONSID )
     initVar( "SmartSkipGrace", "", sess, SESSIONSID )
+
+    if getVarNumeric( "Version", 0, sess, SESSIONSID ) < 000101 then
+        luup.attr_set( 'category_num', 15, sess )
+    end
+    setVar( SESSIONSID, "Version", _CONFIGVERSION, sess )
 end
 
 local function clearPlayingState( child )
@@ -584,7 +589,7 @@ end
 local function updateSessions( server, taskid )
     assert(taskid)
     local anyPlaying = false
-    local ok, data, httpstat = serverRequest( "GET", "/Sessions", { ActiveWithinSeconds=960 }, nil, nil, server )
+    local ok, data, httpstat = serverRequest( "GET", "/Sessions", nil, nil, nil, server )
     if not ok then
         luup.set_failure( 1, server )
         if httpstat == 401 then
@@ -775,6 +780,11 @@ local function initServer( server )
     initVar( "SmartSkipGrace", "", server, SERVERSID )
     initVar( "HideOffline", "0", server, SERVERSID )
     initVar( "HideIdle", "0", server, SERVERSID )
+
+    if getVarNumeric( "Version", 0, server, SERVERSID ) < 000101 then
+        luup.attr_set( 'category_num', 1, server )
+    end
+    setVar( SERVERSID, "Version", _CONFIGVERSION, server )
 end
 
 -- Start server
@@ -1665,7 +1675,13 @@ function startPlugin( pdev )
     plugin_runOnce( pdev )
 
     -- More inits
-    if not isEnabled( pdev ) then
+    local enabled = isEnabled( pdev )
+    for _,d in ipairs( getChildDevices( nil, pdev ) or {} ) do
+        luup.attr_set( 'invisible', enabled and 0 or 1, d )
+    end
+    luup.attr_set( 'invisible', 0, pdev )
+    if not enabled then
+        L{level=2,msg="disabled (see Enabled state variable)"}
         clearChildren( pdev )
         gatewayStatus("DISABLED")
         return true, "Disabled", _PLUGIN_NAME
