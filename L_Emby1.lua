@@ -142,6 +142,29 @@ local function wsopen( url, server )
 
     -- This call is async -- it returns immediately.
     luup.io.open( server, ip, port )
+    
+    return true
+end
+
+-- Send WebSocket message (opcode and payload). Does not implement super-long
+-- frame length or masking because we don't need it for this endpoint.
+local function wssend( opcode, s, server )
+    D("wssend(%1,%2,%3)", opcode, s, server)
+    if type(s) == "table" then s = json.encode( s ) else s = tostring( s ) or "" end
+    local b = bit.bor( 0x80, opcode ) -- fin
+    local frame = string.char(b)
+    if #s < 126 then
+        frame = frame .. string.char(#s)
+    elseif #s <= 65535 then
+        frame = frame .. string.char(126) -- indicate 16-bit length follows
+        frame = frame .. string.char( math.floor( #s / 256 ) )
+        frame = frame .. string.char( #s % 256 )
+    else
+        error("Super-long frame length not implemented")
+    end
+    frame = frame .. s
+    D("wssend() server %1 sending frame of %2 bytes for %3", server, #frame, s)
+    return luup.io.write( frame, server )
 end
 
 -- WebSocket connect--connect on open socket
@@ -164,66 +187,48 @@ local function wsconnect( server )
         D("wsconnect() write of request failed")
         return false
     end
-    local resp = ""
-    local lastch = ""
+    local buf = {}
+    local lastch = 0
     -- Read until we get two consecutive linefeeds.
     while true do
         local b = luup.io.read( 5, server )
-        D("wsconnect() received %1 (%2)", b, string.byte(b))
-        if (b or "") == "" then break end
-        resp = resp .. b
+        -- D("wsconnect() received %1 (%2)", b, string.byte(b))
+        if b == nil then break end
+        table.insert( buf, b )
         b = string.byte(b)
-        if b == 10 and lastch == 10 then break end
-        if b ~= 13 then lastch = b end
-        if #resp == 13 and resp:match( "^HTTP/1%.. 101 " ) then
-            D("wsconnect() SUCCESSFUL NEGOTATION COMING!")
-        end
+        if b == 10 and lastch == 10 then break
+        elseif b ~= 13 then lastch = b end
     end
-    D("wsconnect() full response is %1", resp)
+    local resp = table.concat( buf, "" )
     if resp:match( "^HTTP/1%.. 101 " ) then
         D("wsconnect() negotiation succeeded!")
-        if debugMode then luup.log(resp,2) end
+        -- if debugMode then luup.log(resp, 2) end
         ds.wsconnected = true
         ds.readstate = STATE_START
+        wssend( 9, "", server ) -- send no-op to come out of intercept()
         return true -- Flag now in websocket protocol
     else
-        D("wsconnect() negotiation failed, luup.io.read returned %1", resp)
+        D("wsconnect() negotiation failed, endpoint returned %1", resp)
     end
-    L({level=1,msg="%1 (%2) unable to open WebSocket"}, luup.devices[server].description, server)
+    L({level=1,msg="%1 (%2) unable to open WebSocket; invalid response from endpoint."}, luup.devices[server].description, server)
+    luup.log( resp, 1 )
     return false
 end
 
-local function wssend( opcode, s, server )
-    D("wssend(%1,%2,%3)", opcode, s, server)
-    if type(s) == "table" then s = json.encode( s ) else s = tostring( s ) or "" end
-    local b = bit.bor( 0x80, opcode ) -- fin
-    local frame = string.char(b)
-    if #s < 126 then
-        frame = frame .. string.char(#s)
-    elseif #s <= 65535 then
-        frame = frame .. string.char(126) -- indicate 16-bit length follows
-        frame = frame .. string.char( math.floor( #s / 256 ) )
-        frame = frame .. string.char( #s % 256 )
-    else
-        error("Super-long frame length not implemented")
-    end
-    frame = frame .. s
-    D("wssend() server %1 sending frame of %2 bytes for %3", server, #frame, s)
-    return luup.io.write( frame, server )
-end
-
-local function handleIncomingByte( b, server )
+local function handleIncomingByte( b, ch, server )
     -- D("handleIncomingByte(%1,%2)", b, server)
     local sd = devData[tostring(server)]
+    -- ??? Should we check time since last byte and force start if too long?
     if sd.readstate == STATE_READDATA then
         -- Performance: this at top; table > string concatenation
-        table.insert( sd.msg, string.char( b ) )
+        table.insert( sd.msg, ch )
         sd.mlen = sd.mlen - 1
         if debugMode and sd.mlen % 2500 == 0 then D("handleIncomingByte() reading message, %1 bytes to go", sd.mlen) end
         if sd.mlen <= 0 then
             local delta = math.max( socket.gettime() - sd.start, 0.001 )
             D("handleIncomingByte() message received, %1 bytes in %2 secs, %3 bytes/sec", sd.size, delta, sd.size / delta)
             handleIncomingMessage( sd.opcode, table.concat( sd.msg, "" ), server )
+            sd.msg = nil -- gc eligible
             sd.readstate = STATE_START
         end
     elseif sd.readstate == STATE_START then
@@ -236,6 +241,7 @@ local function handleIncomingByte( b, server )
         sd.readstate = STATE_READLEN1
         sd.start = socket.gettime()
         if not sd.fin then sd.readstate = STATE_SYNC end
+        D("handleIncomingByte() start of message, opcode %1", sd.opcode)
     elseif sd.readstate == STATE_READLEN1 then
         sd.mask = bit.band( b, 128 )
         sd.mlen = bit.band( b, 127 )
@@ -246,12 +252,13 @@ local function handleIncomingByte( b, server )
             -- 64-bit length (unsupported, ignore message)
             sd.readstate = STATE_SYNC
         else
+            D("handleIncomingByte() short length, expecting %1 byte payload", sd.mlen)
+            sd.size = mlen
             if sd.mlen > 0 then
-                sd.size = sd.mlen
+                -- Transition to reading data.
                 sd.readstate = STATE_READDATA
             else
-                -- No data with this opcode
-                sd.size = 0
+                -- No data with this opcode, process and return to start state.
                 handleIncomingMessage( sd.opcode, "", server )
                 sd.readstate = STATE_START
             end
@@ -264,7 +271,7 @@ local function handleIncomingByte( b, server )
         sd.mlen = sd.mlen + b
         sd.size = sd.mlen
         sd.readstate = STATE_READDATA
-        D("handleIncomingByte() finished 16-bit length read, new len is %1", sd.mlen)
+        D("handleIncomingByte() finished 16-bit length read, expecting %1 byte payload", sd.mlen)
     elseif sd.readstate == STATE_SYNC then
         -- Need to resync. Look for a ping (opcode 9, fin set, length 0)
         if b == 0x89 then
@@ -294,7 +301,7 @@ end
 function handleIncoming( data, server )
     -- D("handleIncoming(%1 bytes,%2)", #data, server)
     if #data == 1 then
-        handleIncomingByte( data:byte(), server ) -- fast!
+        handleIncomingByte( data:byte(), data, server ) -- fast!
     else
         for ix=1,#data do
             local byte = string.byte(data,ix)
@@ -1102,9 +1109,11 @@ end
 local function launchUpdate( server, task )
     D("launchUpdate(%1,%2)", server, task)
     if luup.is_ready( server ) then
-        wssend( 1, { MessageType="SessionsStart", Data="5000,5000" }, server )
+        wssend( 1, { MessageType="SessionsStart", Data="0,60000" }, server )
         local ra,rb,rc,rd = luup.call_action( SERVERSID, "Update", {}, server )
         D("launchUpdate() return from Update action %1,%2,%3,%4", ra,rb,rc,rd)
+        --[[
+        -- Performance test
         local msg = string.char( 0x89 )
         msg = msg .. string.char( 126 )
         msg = msg .. string.char( 32768 / 256 )
@@ -1114,6 +1123,7 @@ local function launchUpdate( server, task )
         for ix=1,32768 do
             handleIncoming( ch, server )
         end
+        --]]
     else
         D("launchUpdate() server %1 not ready, waiting", server)
         scheduleDelay( task, 5 )
@@ -1183,9 +1193,7 @@ local function startServer( server )
 
         -- Launch websocket
         local addr = luup.variable_get( SERVERSID, "LocalAddress", server ) or "http://127.0.0.1:8096"
-        -- wsopen( addr, server )
-        if false and wsconnect( server ) then
-            -- scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 120 )
+        if wsopen( addr, server ) and wsconnect( server ) then
             D("startServer() server %1 successful WebSocket startup", server)
             scheduleDelay( { id=tostring(server), owner=server, info="launchupdate", func=launchUpdate }, 5 )
         else
