@@ -14,6 +14,8 @@
         <modelDescription></modelDescription>
         <modelName>Emby Server</modelName>
         <Category_Num>1</Category_Num>
+        <protocol>raw</protocol>
+        <ioPort>8096</ioPort>
         <serviceList>
           <service>
             <serviceType>urn:schemas-toggledbits-com:service:EmbyServer:1</serviceType>

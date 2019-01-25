@@ -9,6 +9,8 @@ module("L_Emby1", package.seeall)
 
 local debugMode = false
 
+firstbyte = true -- ??? temporary
+
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
 local _PLUGIN_VERSION = "1.1develop"
@@ -21,6 +23,7 @@ local socket = require "socket"
 local http = require "socket.http"
 local ltn12 = require "ltn12"
 local json = require "dkjson"
+local bit = require "bit"
 
 local MYSID = "urn:toggledbits-com:serviceId:Emby1"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Emby:1"
@@ -42,7 +45,18 @@ local deferClear = false
 
 local DISCOVERYPERIOD = 15
 
-local function dump(t, seen)
+local STATE_START = "start"
+local STATE_READLEN1 = "len"
+local STATE_READLEN161 = "len16-1"
+local STATE_READLEN162 = "len16-2"
+local STATE_READDATA = "data"
+local STATE_SYNC = "sync"
+local STATE_SYNC = "resync"
+local STATE_ERROR = "error"
+
+local handleIncomingMessage
+
+function dump(t, seen)
     if t == nil then return "nil" end
     if seen == nil then seen = {} end
     local sep = ""
@@ -101,6 +115,242 @@ local function D(msg, ...)
         L( { msg=msg,prefix=(_PLUGIN_NAME .. "(debug)") }, ... )
     end
 end
+
+local function wsopen( url, server )
+    D("wsopen(%1,%2)", url, server)
+
+    url = url:gsub("^http", "ws")
+    local port
+    local proto, ip, ps = url:match("^(wss?)://([^:/]+)(.*)")
+    if not proto then
+        error("Invalid protocol/address for WebSocket open in " .. url)
+    elseif ps then
+        port = ps:match(":(%d+)")
+    else
+        port = 8096
+    end
+
+    -- Save IP and port
+    -- ??? don't do this, so Luup doesn't auto-open socket (and fuck it up later)
+    -- luup.attr_set( 'ip', string.format( "%s:%n", ip, port ), server )
+
+    local ds = devData[tostring(server)]
+    ds.wsconnected = false
+    ds.ip = ip
+    ds.port = port
+    ds.readstate = STATE_START
+
+    -- This call is async -- it returns immediately.
+    luup.io.open( server, ip, port )
+end
+
+-- WebSocket connect--connect on open socket
+local function wsconnect( server )
+    D("wsconnect(%1)", server)
+
+    local ds = devData[tostring(server)]
+
+    -- Handshake
+    local apikey = luup.variable_get( SERVERSID, "APIKey", server ) or ""
+    local req = string.format("GET /embywebsocket?api_key=%s&deviceId=ef22e84e4caad209b23899602c3e6019 HTTP/1.1\nHost: %s\nUpgrade: websocket\nConnection: Upgrade\nSec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\nSec-WebSocket-Protocol: chat, superchat\nSec-WebSocket-Version: 13\n\n",
+        apikey, ds.ip)
+
+    -- Signal Luup that we want to read data ourselves here (precedes write).
+    luup.io.intercept( server )
+
+    -- Send request.
+    D("wsconnect() sending %1", req)
+    if not luup.io.write( req, server ) then
+        D("wsconnect() write of request failed")
+        return false
+    end
+    local resp = ""
+    local lastch = ""
+    -- Read until we get two consecutive linefeeds.
+    while true do
+        local b = luup.io.read( 5, server )
+        D("wsconnect() received %1 (%2)", b, string.byte(b))
+        if (b or "") == "" then break end
+        resp = resp .. b
+        b = string.byte(b)
+        if b == 10 and lastch == 10 then break end
+        if b ~= 13 then lastch = b end
+        if #resp == 13 and resp:match( "^HTTP/1%.. 101 " ) then
+            D("wsconnect() SUCCESSFUL NEGOTATION COMING!")
+        end
+    end
+    D("wsconnect() full response is %1", resp)
+    if resp:match( "^HTTP/1%.. 101 " ) then
+        D("wsconnect() negotiation succeeded!")
+        if debugMode then luup.log(resp,2) end
+        ds.wsconnected = true
+        ds.readstate = STATE_START
+        return true -- Flag now in websocket protocol
+    else
+        D("wsconnect() negotiation failed, luup.io.read returned %1", resp)
+    end
+    L({level=1,msg="%1 (%2) unable to open WebSocket"}, luup.devices[server].description, server)
+    return false
+end
+
+local function wssend( opcode, s, server )
+    D("wssend(%1,%2,%3)", opcode, s, server)
+    if type(s) == "table" then s = json.encode( s ) else s = tostring( s ) or "" end
+    local b = bit.bor( 0x80, opcode ) -- fin
+    local frame = string.char(b)
+    if #s < 126 then
+        frame = frame .. string.char(#s)
+    elseif #s <= 65535 then
+        frame = frame .. string.char(126) -- indicate 16-bit length follows
+        frame = frame .. string.char( math.floor( #s / 256 ) )
+        frame = frame .. string.char( #s % 256 )
+    else
+        error("Super-long frame length not implemented")
+    end
+    frame = frame .. s
+    D("wssend() server %1 sending frame of %2 bytes for %3", server, #frame, s)
+    return luup.io.write( frame, server )
+end
+
+local function handleIncomingByte( b, server )
+    -- D("handleIncomingByte(%1,%2)", b, server)
+    local sd = devData[tostring(server)]
+    if sd.readstate == STATE_START then
+        sd.fin = bit.band( b, 128 ) > 0
+        sd.opcode = bit.band( b, 15 )
+        sd.mlen = 0
+        sd.size = 0
+        sd.mask = 0
+        sd.msg = ""
+        sd.readstate = STATE_READLEN1
+        sd.start = socket.gettime()
+        if not sd.fin then sd.readstate = STATE_SYNC end
+    elseif sd.readstate == STATE_READLEN1 then
+        sd.mask = bit.band( b, 128 )
+        sd.mlen = bit.band( b, 127 )
+        if sd.mlen == 126 then
+            -- Payload length in 16 bit integer that follows, read 2 bytes (big endian)
+            sd.readstate = STATE_READLEN161
+        elseif sd.mlen == 127 then
+            -- 64-bit length (unsupported, ignore message)
+            sd.readstate = STATE_SYNC
+        else
+            if sd.mlen > 0 then
+                sd.size = sd.mlen
+                sd.readstate = STATE_READDATA
+            else
+                -- No data with this opcode
+                sd.size = 0
+                handleIncomingMessage( sd.opcode, "", server )
+                sd.readstate = STATE_START
+            end
+        end
+        D("handleIncomingByte() opcode %1 len %2 next state %3", sd.opcode, sd.mlen, sd.readstate)
+    elseif sd.readstate == STATE_READLEN161 then
+        sd.mlen = b * 256
+        sd.readstate = STATE_READLEN162
+    elseif sd.readstate == STATE_READLEN162 then
+        sd.mlen = sd.mlen + b
+        sd.size = sd.mlen
+        sd.readstate = STATE_READDATA
+        D("handleIncomingByte() finished 16-bit length read, new len is %1", sd.mlen)
+    elseif sd.readstate == STATE_READDATA then
+        sd.msg = sd.msg .. string.char( b )
+        sd.mlen = sd.mlen - 1
+        if debugMode and sd.mlen % 2500 == 0 then D("handleIncomingByte() reading message, %1 bytes to go", sd.mlen) end
+        if sd.mlen <= 0 then
+            local delta = math.max( socket.gettime() - sd.start, 0.001 )
+            D("handleIncomingByte() message received, %1 bytes in %2 secs, %3 bytes/sec", sd.size, delta, sd.size / delta)
+            handleIncomingMessage( sd.opcode, sd.msg, server )
+            sd.readstate = STATE_START
+        end
+    elseif sd.readstate == STATE_SYNC then
+        -- Need to resync. Look for a ping (opcode 9, fin set, length 0)
+        if b == 0x89 then
+            sd.readstate = STATE_RESYNC
+        end
+    elseif sd.readstate == STATE_RESYNC then
+        -- Here's where we look for the zero length following the ping op
+        if b == 0x89 then
+            -- no state change
+        elseif b == 0 then
+            -- Good ping (likely)
+            D("handleIncomingByte() **** RESYNC ****")
+            sd.readstate = STATE_START
+        else
+            -- Nope, start over.
+            sd.readstate = STATE_SYNC
+        end
+    elseif sd.readstate == STATE_ERROR then
+        -- Just consume (ignore) data until we time out
+        error("FIX ME") -- ??? stuck in jail, how to get out of this state?
+    else
+        assert(false, "Invalid state in handleIncomingByte: "..tostring(sd.readstate))
+    end
+    -- D("handleIncomingByte() next state is %1, sd now %2", sd.readstate, sd)
+end
+
+function handleIncoming( data, server )
+    -- D("handleIncoming(%1 bytes,%2)", #data, server)
+    if #data == 1 then
+        handleIncomingByte( data:byte(), server ) -- fast!
+    else
+        for ix=1,#data do
+            local byte = string.byte(data,ix)
+            handleIncomingByte( byte, server )
+        end
+    end
+end
+
+--[[
+local function wsdecode( data, server )
+    -- Read first byte (header)
+    local b, err = sock:receive( 1 )
+    if b == nil or err then
+        D("wsreceive() lead-in scan, got %1(%2) err %3", b, b and string.byte(b) or 0, err)
+        return false
+    end
+    b = string.byte( b )
+    local fin = bit.band( b, 128 ) > 0
+    local opcode = bit.band( b, 15 )
+    sock:settimeout( 1 )
+    b, err = sock:receive( 1 )
+    if b == nil or err then
+        D("wsreceive() missing length byte")
+        return false
+    end
+    -- Read first payload byte (minimum read is 2 bytes, header and payload).
+    b = string.byte( b )
+    local mask = bit.band( b, 128 )
+    local mlen = bit.band( b, 127 )
+    if mlen == 126 then
+        -- Payload length in 16 bit integer that follows, read 2 bytes (big endian)
+        b, err = sock:receive( 2 )
+        if b == nil or err then
+            D("wsreceive() missing extended length byte")
+            return false
+        end
+        mlen = string.byte( b, 1 ) * 256 + string.byte( b, 2 )
+    elseif mlen == 127 then
+        -- 64 bit length (2x32)
+        error("no implementation")
+    end
+    D("wsreceive() header received, opcode=%1, mask=%2, datalen=%3", opcode, mask, mlen)
+    local msg = ""
+    while mlen > 0 do
+        local nn = (mlen < 64) and mlen or 64
+        b, err = sock:receive( nn )
+        if b == nil or err then
+            D("wsreceive() early end of data with %1 bytes remaining", mlen)
+            return false
+        end
+        msg = msg .. b
+        mlen = mlen - nn
+    end
+    D("wsreceive() received data complete")
+    return opcode, msg
+end
+--]]
 
 local function checkVersion(dev)
     local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
@@ -679,6 +929,89 @@ local function updateSessions( server, taskid )
     scheduleDelay( taskid, delay )
 end
 
+handleIncomingMessage = function( op, msg, server )
+    D("handleIncomingMessage(%1,%2 bytes,%3)", op, #msg, server)
+    if op == 9 then return end -- ping
+    if debugMode and #msg > 0 then luup.log( msg:gsub( "(%c)", function( c ) return string.format("%%%02x", string.byte(c)) end ), 2 ) end
+    if not ( op == 1 ) then
+        D("handleIncomingMessage() don't know how to handle opcode %1", op)
+        return
+    end
+
+    local anyPlaying = false
+    local data,pos,err = json.decode( msg )
+    if not data or err then
+        D("handleIncomingMessage() invalid data received, %1 at %2", err, pos)
+        if debugMode then luup.log( msg, 2 ) end
+        return
+    end
+    if data.MessageType ~= "Sessions" then
+        D("handleIncomingMessage() can't handle incoming message type %1", data.MessageType)
+        return
+    end
+
+    -- Run with it!
+    data = data.Data
+
+    luup.set_failure( 0, server )
+    setVar( SERVERSID, "LastUpdate", os.time(), server )
+
+    -- Create a map of child sessions for this server.
+    local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj )
+        local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
+        return ps == server
+    end )
+    local childSessions = map( cs, function( obj ) return luup.devices[obj].id end )
+
+    -- Iterate over data
+    D("updateSessions() server returned %1 sessions", #(data or {}))
+    for _,sess in ipairs( data or {} ) do
+        if isControllableSession( sess ) then
+            D("updateSessions() updating session %1 (%2)", sess.DeviceName, sess.Id)
+            local child = childSessions[ sess.Id ]
+            if child then
+-- luup.log(json.encode(sess),2)
+                childSessions[ sess.Id  ] = nil
+                updateSession( sess, child, server )
+                anyPlaying = anyPlaying or ( sess.NowPlayingItem ~= nil )
+                local show = luup.variable_get( SESSIONSID, "Visibility", child ) or ""
+                if string.find(":show:hide:", show) then
+                    luup.attr_set( "invisible", ( show == "hide" ) and "1" or "0", child )
+                elseif getVarNumeric( "HideIdle", 0, server, SERVERSID ) ~= 0 then
+                    luup.attr_set( "invisible", ( sess.NowPlayingItem == nil ) and "1" or "0", child )
+                else
+                    luup.attr_set( "invisible", "0", child )
+                end
+            else
+                L({level=2,msg="Child device not found for session %1 (%2) on %3 (%4), a %5 %6; you may need to run inventory on this server, or the child is not supported."},
+                    sess.Id, sess.DeviceName, luup.devices[server].description, server,
+                    sess.Client, sess.ApplicationVersion)
+            end
+        end
+    end
+    for k,v in pairs( childSessions ) do
+        D("updateSessions() clearing offline session %1 (dev #%2 %3)", k,
+            v, (luup.devices[v] or {}).description)
+        if setVar( SESSIONSID, "Offline", 1, v ) ~= "1" then
+            L({level=3,msg="Marking %1 (%2) offline (server return no data for active session request)"},
+                (luup.devices[v] or {}).description, v)
+        end
+        clearPlayingState( v )
+        setVar( SESSIONSID, "DisplayStatus", "Offline", v )
+        local show = luup.variable_get( SESSIONSID, "Visibility",  v ) or ""
+        if string.find(":show:hide:", show) then
+            luup.attr_set( "invisible", ( show == "hide" ) and "1" or "0", v )
+        elseif getVarNumeric( "HideOffline", 0, server, SERVERSID ) ~= 0 then
+            luup.attr_set( "invisible", "1", v )
+        else
+            luup.attr_set( "invisible", "0", v )
+        end
+    end
+
+    -- Defer update
+    scheduleDelay( tostring(server), 120 )
+end
+
 -- Inventory sessions using local server request
 local function inventorySessions( server )
     L("Launching session inventory for %1 (%2)", luup.devices[server].description, server)
@@ -762,9 +1095,6 @@ local function inventorySessions( server )
             luup.chdev.sync( pluginDevice, ptr ) -- should reload
         end
     end
-
-    -- Reschedule for update
-    scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 5 )
 end
 
 -- One-time init for server
@@ -785,6 +1115,18 @@ local function initServer( server )
         luup.attr_set( 'category_num', 1, server )
     end
     setVar( SERVERSID, "Version", _CONFIGVERSION, server )
+end
+
+local function launchUpdate( server, task )
+    D("launchUpdate(%1,%2)", server, task)
+    if luup.is_ready( server ) then
+        wssend( 1, { MessageType="SessionsStart", Data="5000,5000" }, server )
+        local ra,rb,rc,rd = luup.call_action( SERVERSID, "Update", {}, server )
+        D("launchUpdate() return from Update action %1,%2,%3,%4", ra,rb,rc,rd)
+    else
+        D("launchUpdate() server %1 not ready, waiting", server)
+        scheduleDelay( task, 5 )
+    end
 end
 
 -- Start server
@@ -846,9 +1188,20 @@ local function startServer( server )
         if getVarNumeric( "StartupInventory", 1, pluginDevice, MYSID ) ~= 0 then
             setVar( SERVERSID, "Message", "Taking session inventory...", server )
             inventorySessions( server )
-        else
-            scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 5 )
         end
+
+        -- Launch websocket
+        local addr = luup.variable_get( SERVERSID, "LocalAddress", server ) or "http://127.0.0.1:8096"
+        wsopen( addr, server )
+        if wsconnect( server ) then
+            -- scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 120 )
+            D("startServer() server %1 successful WebSocket startup", server)
+            scheduleDelay( { id=tostring(server), owner=server, info="launchupdate", func=launchUpdate }, 5 )
+        else
+            L({level=1,msg="Server %1 failed to open WebSocket; falling back to polling."}, server)
+            scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 15 )
+        end
+
         setVar( SERVERSID, "Message", okmsg, server )
     end
 end
@@ -932,7 +1285,6 @@ local function getSystemIP4BCast( dev )
     D("getSystemIP4BCast() sys ip %1 netmask %2", vera_ip, mask)
     local a1,a2,a3,a4 = vera_ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)")
     local m1,m2,m3,m4 = mask:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)")
-    local bit = require("bit")
     -- Yeah. This is my jam, baby!
     a1 = bit.bor(bit.band(a1,m1), bit.bxor(m1,255))
     a2 = bit.bor(bit.band(a2,m1), bit.bxor(m2,255))
@@ -1086,7 +1438,9 @@ local function embyUserRequest( path, args, hh, dev, method )
     return success, resp, httpstat
 end
 
+--[[
 local function embyListServers( dev )
+    assert(cui) -- we have work to do, this is a reminder
     local success, data, httpstat = embyUserRequest( "/servers", { userId=cui }, nil, dev )
     D("embyListServers() response data is %1", data)
     for _,server in ipairs(data) do
@@ -1098,6 +1452,7 @@ local function embyListServers( dev )
     -- If there are servers to be added, add them.
     error("No implementation yet")
 end
+--]]
 
 -- Log in to server with username/password. Returns auth token, which we store.
 --[[ This is another one of those things where the documentation is loose on a
@@ -1142,11 +1497,11 @@ end
 local function embyRemoteLogin( username, password, dev )
     local success, response, httpStatus = doRequest( "POST", "https://connect.emby.media/service/user/authenticate", {},
         { nameOrEmail=username or "", rawpw=password or ""}, dev )
-    if status then
+    if success then
         local data,pos,err = json.decode( response )
         if not err then
             setVar( MYSID, "ConnectAccessToken", data.ConnectAccessToken or "", dev )
-            setvar( MYSID, "ConnectUserId", data.ConnectUserId or "", dev )
+            setVar( MYSID, "ConnectUserId", data.ConnectUserId or "", dev )
             inventoryServers( dev )
         else
             gatewayStatus("Login error!")
@@ -1195,10 +1550,10 @@ function actionSessionMessage( pdev, message, title, timeout )
     assert(luup.devices[pdev].device_type==SESSIONTYPE)
     local sess = luup.devices[pdev].id
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
-    local reqpath = "/Sessions/" .. sess .. "/Message" .. (actionpath or "")
+    local reqpath = "/Sessions/" .. sess .. "/Message"
     local params = { Header=title or "", Text=message or "" }
     if (timeout or "") ~= "" then params.TimeoutMs = timeout end
-    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, args, server )
+    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, nil, server )
     return ok
 end
 
@@ -1208,7 +1563,7 @@ function actionSessionViewMedia( pdev, id, title, mediatype )
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     local reqpath = "/Sessions/" .. sess .. "/Viewing"
     local params = { ItemId=id, ItemName=title, ItemType=mediatype }
-    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, args, server )
+    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, {}, server )
     return ok
 end
 
@@ -1338,25 +1693,25 @@ function actionSessionSmartSkip( pdev, backwards )
         local ch = luup.variable_get( SESSIONSID, "PlayingItemChapters", pdev ) or ""
         local data = json.decode( ch )
         D("actionSessionSmartSkip() backwards=%1, position=%2, chapters=%3", backwards, pos, data)
-        local goto
+        local destpos
         if data then
             if not backwards then
-                goto = pend * 10000000
+                destpos = pend * 10000000
                 for _,v in ipairs(data) do
                     local chpos = math.floor( v.StartPositionTicks / 10000 ) / 1000
                     if chpos > pos then
-                        goto = v.StartPositionTicks
+                        destpos = v.StartPositionTicks
                         break
                     end
                 end
             else
-                goto = 0
+                destpos = 0
                 local grace = getVarNumeric( "SmartSkipGrace", getVarNumeric( "SmartSkipGrace", 5, server, SERVERSID ), pdev, SESSIONSID )
                 for ix=#data,1,-1 do
                     local v = data[ix]
                     local chpos = math.floor( v.StartPositionTicks / 10000 ) / 1000
                     if (chpos + grace) < pos then
-                        goto = v.StartPositionTicks
+                        destpos = v.StartPositionTicks
                         break
                     end
                 end
@@ -1364,17 +1719,15 @@ function actionSessionSmartSkip( pdev, backwards )
         else
             -- No chapter data, just X-second skip; skip can be session-specific or server default (30).
             local skip = getVarNumeric( "SmartSkipDefault", getVarNumeric( "SmartSkipDefault", 30, server, SERVERSID ), pdev, SESSIONSID )
-            goto = pos + skip * (backwards and -1 or 1)
+            destpos = pos + skip * (backwards and -1 or 1)
             if pos < 0 then pos = 0 elseif pos > pend then pos = pend end
-            goto = goto * 10000000
+            destpos = destpos * 10000000
         end
         --[[ Oh, and another fucking surprise ending. Emby's remote control docs for seek are wrong, too. Again, swagger to the rescue. --]]
         local sess = luup.devices[pdev].id
         local reqpath = "/Sessions/" .. sess .. "/Playing/Seek"
-        local ok, data, httpstat = serverRequest( "POST", reqpath, nil, nil, { Command="Seek", SeekPositionTicks=goto }, server )
-        if ok then
-            scheduleDelay( tostring(server), 2 )
-        end
+        serverRequest( "POST", reqpath, nil, nil, { Command="Seek", SeekPositionTicks=destpos }, server )
+        scheduleDelay( tostring(server), 2 )
     else
         -- Default to track commands for all other media types.
         local cmd = backwards and "/PreviousTrack" or "/NextTrack"
@@ -1554,7 +1907,7 @@ end
 -- Dangerous debug stuff. Remove all child devices except servers.
 function actionClear1( dev )
     local ptr = luup.chdev.start( pluginDevice )
-    for k,v in pairs(luup.devices) do
+    for _,v in pairs(luup.devices) do
         if v.device_num_parent == pluginDevice and v.device_type == SERVERTYPE then
             luup.chdev.append( pluginDevice, ptr, v.id, v.description, "",
                 "D_EmbyServer1.xml", "", "", false )
@@ -1625,6 +1978,7 @@ function startPlugin( pdev )
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 
     -- Early inits
+firstbyte = true -- ???
     pluginDevice = pdev
     isALTUI = false
     isOpenLuup = false
@@ -1825,8 +2179,8 @@ local function getDevice( dev, pdev, v )
 end
 
 local function getEvents( deviceNum )
-    if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= RSTYPE then
-        return "no events: device does not exist or is not EmbySensor"
+    if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= SERVERTYPE then
+        return "no events: device does not exist or is not EmbyServer"
     end
     local resp = "    Events" .. EOL
     for _,e in ipairs( ( devData[tostring(deviceNum)] or {}).eventList or {} ) do

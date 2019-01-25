@@ -15,6 +15,8 @@
         <modelName>Emby Plugin</modelName>
         <handleChildren>1</handleChildren>
         <Category_Num>1</Category_Num>
+        <protocol>raw</protocol>
+        <ioPort>8096</ioPort>
         <serviceList>
           <service>
             <serviceType>urn:schemas-toggledbits-com:service:Emby:1</serviceType>

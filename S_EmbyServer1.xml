@@ -66,5 +66,9 @@
             <name>Inventory</name>
             <argumentList/>
         </action>
+        <action>
+            <name>Update</name>
+            <argumentList/>
+        </action>
     </actionList>
 </scpd>

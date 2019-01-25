@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- I_Emby1.xml -->
 <implementation>
+    <settings>
+        <protocol>raw</protocol>
+        <ioPort>8096</ioPort>
+    </settings>
     <functions>
         -- --------------------------------------------------------------------
         -- Emby
@@ -17,10 +21,25 @@
             embyRequestHandler = EmbyPlugin.handleLuupRequest
             embyWatchCallback = EmbyPlugin.watchCallback
             embyTaskTick = EmbyPlugin.taskTickCallback
+            embyIncoming = EmbyPlugin.handleIncoming
             luup.register_handler("embyRequestHandler", "Emby")
             return EmbyPlugin.startPlugin(devNum)
         end
     </functions>
+    <incoming>
+        <lua>
+            if EmbyPlugin.firstbyte then
+                EmbyPlugin.firstbyte = false
+                luup.log( debug.traceback(), 2 )
+                for ix=1,16 do
+                    local lvar = debug.getlocal(1,ix)
+                    if lvar == nil then break end
+                    luup.log( EmbyPlugin.dump( { lvar=lvar } ), 2 )
+                end
+            end
+            EmbyPlugin.handleIncoming( lul_data, lul_device )
+        </lua>
+    </incoming>
     <startup>startupEmbyPlugin</startup>
     <actionList>
         <action>
@@ -71,7 +90,22 @@
                 return EmbyPlugin.jobServerInventory( lul_device )
             </job>
         </action>
-        
+        <action>
+            <serviceId>urn:toggledbits-com:serviceId:EmbyServer1</serviceId>
+            <name>Update</name>
+            <job>
+                return 5,300 -- waiting for callback, 30 second timeout
+            </job>
+            <incoming>
+                embyIncoming( lul_data, lul_device )
+                return 5,300 -- waiting for callback, 30-second timeout
+            </incoming>
+            <timeout>
+                luup.log("timeout " .. tostring(lul_device) .. " job " .. tostring(lul_job), 1)
+                return 2,0
+            </timeout>
+        </action>
+
         <!-- ACTIONS FOR SESSIONS -->
         
         <action>
