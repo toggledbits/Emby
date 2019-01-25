@@ -440,17 +440,6 @@ local function getVarNumeric( name, dflt, dev, sid )
     return (s == nil) and dflt or s
 end
 
--- Find device by name
-local function findDeviceByName( n )
-    n = tostring(n):lower()
-    for k,v in pairs( luup.devices ) do
-        if tostring(v.description):lower() == n then
-            return k,v
-        end
-    end
-    return nil
-end
-
 -- Add an event to the event list. Prune the list for size.
 local function addEvent( t )
     local p = shallowCopy(t)
@@ -535,14 +524,6 @@ local function getChildDevices( typ, parent, filter )
         end
     end
     return res
-end
-
-local function findChildById( childId, parent )
-    parent = parent or pluginDevice
-    for k,v in pairs(luup.devices) do
-        if v.device_num_parent == parent and v.id == childId then return k,v end
-    end
-    return false
 end
 
 --[[ Prep for adding new children via the luup.chdev mechanism. The existingChildren
@@ -865,7 +846,7 @@ local function updateSessions( server, taskid )
         luup.set_failure( 0, server )
         setVar( SERVERSID, "LastUpdate", os.time(), server )
         -- Create a map of child sessions for this server.
-        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj )
+        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, _ )
             local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
             return ps == server
         end )
@@ -1034,7 +1015,7 @@ local function inventorySessions( server )
     else
         luup.set_failure( 0, server )
         -- Returns array (hopefully) of sessions (as dev nums) belonging to this server.
-        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj )
+        local cs = getChildDevices( SESSIONTYPE, nil, function( dev, _ )
             local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
             return ps == server
         end )
@@ -1240,7 +1221,7 @@ local function askLuci(p)
 end
 
 -- Query UCI for WAN IP4 IP
-local function getSystemIP4Addr( dev )
+local function getSystemIP4Addr( dev ) -- luacheck: ignore 212
     local vera_ip = askLuci("network.wan.ipaddr")
     D("getSystemIP4Addr() got %1 from Luci", vera_ip)
     if not vera_ip then
@@ -1254,7 +1235,7 @@ local function getSystemIP4Addr( dev )
 end
 
 -- Query UCI for WAN IP4 netmask
-local function getSystemIP4Mask( dev )
+local function getSystemIP4Mask( dev ) -- luacheck: ignore 212
     local mask = askLuci("network.wan.netmask");
     D("getSystemIP4Mask() got %1 from Luci", mask)
     if not mask then
@@ -1418,6 +1399,7 @@ local function launchUDPDiscovery( dev )
     gatewayStatus( "Discovery running..." )
 end
 
+--[[
 local function embyUserRequest( path, args, hh, dev, method )
     method = method or "GET"
     local headers = hh and shallowCopy(hh) or {}
@@ -1437,6 +1419,7 @@ local function embyUserRequest( path, args, hh, dev, method )
     end
     return success, resp, httpstat
 end
+--]]
 
 --[[
 local function embyListServers( dev )
@@ -1494,6 +1477,7 @@ local function embyServerLogin( username, password, dev )
     setVar( SERVERSID, "Message", "Authorization request failed", dev)
 end
 
+--[[
 local function embyRemoteLogin( username, password, dev )
     local success, response, httpStatus = doRequest( "POST", "https://connect.emby.media/service/user/authenticate", {},
         { nameOrEmail=username or "", rawpw=password or ""}, dev )
@@ -1510,6 +1494,7 @@ local function embyRemoteLogin( username, password, dev )
         gatewayStatus("Login failed!")
     end
 end
+--]]
 
 --[[
     ***************************************************************************
@@ -1528,10 +1513,8 @@ function actionSessionGeneralCommand( pdev, actionpath, args )
     local sess = luup.devices[pdev].id
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     local reqpath = "/Sessions/" .. sess .. "/Command" .. (actionpath or "")
-    local ok, data, httpstat = serverRequest( "POST", reqpath, nil, nil, args, server )
-    if ok then
-        scheduleDelay( tostring(server), 2 )
-    end
+    serverRequest( "POST", reqpath, nil, nil, args, server )
+    scheduleDelay( tostring(server), 2 )
 end
 
 function actionSessionPlayCommand( pdev, actionpath, args )
@@ -1539,7 +1522,7 @@ function actionSessionPlayCommand( pdev, actionpath, args )
     local sess = luup.devices[pdev].id
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     local reqpath = "/Sessions/" .. sess .. "/Playing" .. (actionpath or "")
-    local ok, data, httpstat = serverRequest( "POST", reqpath, nil, nil, args, server )
+    local ok = serverRequest( "POST", reqpath, nil, nil, args, server )
     if ok then
         scheduleDelay( tostring(server), 2 )
     end
@@ -1553,7 +1536,7 @@ function actionSessionMessage( pdev, message, title, timeout )
     local reqpath = "/Sessions/" .. sess .. "/Message"
     local params = { Header=title or "", Text=message or "" }
     if (timeout or "") ~= "" then params.TimeoutMs = timeout end
-    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, nil, server )
+    local ok = serverRequest( "POST", reqpath, params, nil, nil, server )
     return ok
 end
 
@@ -1563,13 +1546,12 @@ function actionSessionViewMedia( pdev, id, title, mediatype )
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     local reqpath = "/Sessions/" .. sess .. "/Viewing"
     local params = { ItemId=id, ItemName=title, ItemType=mediatype }
-    local ok, data, httpstat = serverRequest( "POST", reqpath, params, nil, {}, server )
+    local ok = serverRequest( "POST", reqpath, params, nil, nil, server )
     return ok
 end
 
 function actionSessionRefresh( pdev )
     assert(luup.devices[pdev].device_type==SESSIONTYPE)
-    local sess = luup.devices[pdev].id
     local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     scheduleDelay( tostring(server), 1 )
 end
@@ -1630,7 +1612,7 @@ function actionSessionPlayMedia( pdev, argv )
     local cmd = argv.PlayCommand or "PlayNow"
     L("%1 (%2) %3 %4", luup.devices[pdev].description, pdev, cmd, ids)
     local ea = { ItemIds=ids, PlayCommand=cmd }
-    local ok, data, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
+    local ok, _, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
         ea, nil, nil, server )
     if ok then
         scheduleDelay( tostring(server), 2 )
@@ -1652,7 +1634,7 @@ function actionSessionResumeMedia( pdev, restart )
         if #state == 2 then
             local ea = { ItemIds=state[1], PlayCommand="PlayNow" }
             if not restart then ea.StartPositionTicks = tonumber( state[2] ) or 0 end
-            local ok, data, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
+            local ok, _, httpstat = serverRequest( "POST", "/Sessions/" .. sess .. "/Playing",
                 ea, nil, nil, server )
             if ok then
                 L("%1 (%2) ResumeMedia OK, ItemId=%3 StartPositionTicks=%4",
@@ -1720,14 +1702,16 @@ function actionSessionSmartSkip( pdev, backwards )
             -- No chapter data, just X-second skip; skip can be session-specific or server default (30).
             local skip = getVarNumeric( "SmartSkipDefault", getVarNumeric( "SmartSkipDefault", 30, server, SERVERSID ), pdev, SESSIONSID )
             destpos = pos + skip * (backwards and -1 or 1)
-            if pos < 0 then pos = 0 elseif pos > pend then pos = pend end
+            if destpos < 0 then destpos = 0 elseif destpos > pend then destpos = pend end
             destpos = destpos * 10000000
         end
         --[[ Oh, and another fucking surprise ending. Emby's remote control docs for seek are wrong, too. Again, swagger to the rescue. --]]
         local sess = luup.devices[pdev].id
         local reqpath = "/Sessions/" .. sess .. "/Playing/Seek"
-        serverRequest( "POST", reqpath, nil, nil, { Command="Seek", SeekPositionTicks=destpos }, server )
-        scheduleDelay( tostring(server), 2 )
+        local ok = serverRequest( "POST", reqpath, nil, nil, { Command="Seek", SeekPositionTicks=destpos }, server )
+        if ok then
+            scheduleDelay( tostring(server), 2 )
+        end
     else
         -- Default to track commands for all other media types.
         local cmd = backwards and "/PreviousTrack" or "/NextTrack"
@@ -1743,7 +1727,6 @@ end
 function actionSessionSmartMute( pdev, toggle, state )
     D("actionSessionSmartMute(%1,%2,%3)", pdev, toggle, state)
     assert(luup.devices[pdev].device_type == SESSIONTYPE) -- must be Emby gateway
-    local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
     local smc = string.lower( luup.variable_get( SESSIONSID, "SmartMute", pdev ) or "" )
     local mute = getVarNumeric( "Mute", 0, pdev, "urn:micasaverde-com:serviceId:Volume1" )
     if smc == "" or string.find( ":default:0:", smc ) then
@@ -1872,7 +1855,7 @@ function jobDiscoverIP( pdev, addr )
     gatewayStatus("Contacting " .. addr)
     local ok, resp, httpstat = doRequest( "GET", addr .. "/emby/System/Info/Public", nil, nil, pdev )
     if ok then
-        local data,pos,err = json.decode( resp )
+        local data,_,err = json.decode( resp )
         if not err then
             gatewayStatus("Found " .. data.ServerName .. " (" .. data.Id .. ")")
             devData[tostring(pdev)].discoveryResponses = { { Address=addr, Name=data.ServerName, Id=data.Id } }
@@ -1906,14 +1889,14 @@ end
 
 -- Dangerous debug stuff. Remove all child devices except servers.
 function actionClear1( dev )
-    local ptr = luup.chdev.start( pluginDevice )
+    local ptr = luup.chdev.start( dev )
     for _,v in pairs(luup.devices) do
-        if v.device_num_parent == pluginDevice and v.device_type == SERVERTYPE then
-            luup.chdev.append( pluginDevice, ptr, v.id, v.description, "",
+        if v.device_num_parent == dev and v.device_type == SERVERTYPE then
+            luup.chdev.append( dev, ptr, v.id, v.description, "",
                 "D_EmbyServer1.xml", "", "", false )
         end
     end
-    luup.chdev.sync( pluginDevice, ptr )
+    luup.chdev.sync( dev, ptr )
 end
 
 --[[
@@ -2141,8 +2124,6 @@ function watchCallback( dev, sid, var, oldVal, newVal )
     assert(var ~= nil) -- nil if service or device watch (can happen on openLuup)
 end
 
-local EOL = "\r\n"
-
 local function getDevice( dev, pdev, v )
     if v == nil then v = luup.devices[dev] end
     if json == nil then json = require("dkjson") end
@@ -2178,24 +2159,6 @@ local function getDevice( dev, pdev, v )
     return devinfo
 end
 
-local function getEvents( deviceNum )
-    if deviceNum == nil or luup.devices[deviceNum] == nil or luup.devices[deviceNum].device_type ~= SERVERTYPE then
-        return "no events: device does not exist or is not EmbyServer"
-    end
-    local resp = "    Events" .. EOL
-    for _,e in ipairs( ( devData[tostring(deviceNum)] or {}).eventList or {} ) do
-        resp = resp .. string.format("        %15s ", os.date("%x %X", e.when or 0) )
-        resp = resp .. ( e.event or "event?" ) .. ":"
-        for k,v in pairs(e) do
-            if not ( k == "time" or k == "when" or k == "event" or ( k == "dev" and tostring(v)==tostring(deviceNum) ) ) then
-                resp = resp .. string.format(" %s=%s,", tostring(k), tostring(v))
-            end
-        end
-        resp = resp .. EOL
-    end
-    return resp
-end
-
 local function alt_json_encode( st )
     str = "{"
     local comma = false
@@ -2220,7 +2183,7 @@ end
 function handleLuupRequest( lul_request, lul_parameters, lul_outputformat )
     D("request(%1,%2,%3) luup.device=%4", lul_request, lul_parameters, lul_outputformat, luup.device)
     local action = lul_parameters['action'] or lul_parameters['command'] or ""
-    local deviceNum = tonumber( lul_parameters['device'], 10 )
+    local deviceNum = tonumber( lul_parameters['device'], 10 ) -- luacheck: ignore 211
     if action == "debug" then
         debugMode = not debugMode
         D("debug set %1 by request", debugMode)
