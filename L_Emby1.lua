@@ -21,7 +21,6 @@ local socket = require "socket"
 local http = require "socket.http"
 local ltn12 = require "ltn12"
 local json = require "dkjson"
-local bit = require "bit"
 
 local MYSID = "urn:toggledbits-com:serviceId:Emby1"
 local MYTYPE = "urn:schemas-toggledbits-com:device:Emby:1"
@@ -149,6 +148,7 @@ end
 local function wssend( opcode, s, server )
     D("wssend(%1,%2,%3)", opcode, s, server)
     if type(s) == "table" then s = json.encode( s ) else s = tostring( s ) or "" end
+    local bit = require "bit"
     local b = bit.bor( 0x80, opcode ) -- fin
     local frame = string.char(b)
     if #s < 126 then
@@ -230,6 +230,7 @@ local function handleIncomingByte( b, ch, server )
             sd.readstate = STATE_START
         end
     elseif sd.readstate == STATE_START then
+        local bit = require "bit"
         sd.fin = bit.band( b, 128 ) > 0
         sd.opcode = bit.band( b, 15 )
         sd.mlen = 0
@@ -241,6 +242,7 @@ local function handleIncomingByte( b, ch, server )
         if not sd.fin then sd.readstate = STATE_SYNC end
         D("handleIncomingByte() start of message, opcode %1", sd.opcode)
     elseif sd.readstate == STATE_READLEN1 then
+        local bit = require "bit"
         sd.mask = bit.band( b, 128 )
         sd.mlen = bit.band( b, 127 )
         if sd.mlen == 126 then
