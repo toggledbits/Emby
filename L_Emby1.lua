@@ -215,13 +215,24 @@ end
 local function handleIncomingByte( b, server )
     -- D("handleIncomingByte(%1,%2)", b, server)
     local sd = devData[tostring(server)]
-    if sd.readstate == STATE_START then
+    if sd.readstate == STATE_READDATA then
+        -- Performance: this at top; table > string concatenation
+        table.insert( sd.msg, string.char( b ) )
+        sd.mlen = sd.mlen - 1
+        if debugMode and sd.mlen % 2500 == 0 then D("handleIncomingByte() reading message, %1 bytes to go", sd.mlen) end
+        if sd.mlen <= 0 then
+            local delta = math.max( socket.gettime() - sd.start, 0.001 )
+            D("handleIncomingByte() message received, %1 bytes in %2 secs, %3 bytes/sec", sd.size, delta, sd.size / delta)
+            handleIncomingMessage( sd.opcode, table.concat( sd.msg, "" ), server )
+            sd.readstate = STATE_START
+        end
+    elseif sd.readstate == STATE_START then
         sd.fin = bit.band( b, 128 ) > 0
         sd.opcode = bit.band( b, 15 )
         sd.mlen = 0
         sd.size = 0
         sd.mask = 0
-        sd.msg = ""
+        sd.msg = {}
         sd.readstate = STATE_READLEN1
         sd.start = socket.gettime()
         if not sd.fin then sd.readstate = STATE_SYNC end
@@ -254,16 +265,6 @@ local function handleIncomingByte( b, server )
         sd.size = sd.mlen
         sd.readstate = STATE_READDATA
         D("handleIncomingByte() finished 16-bit length read, new len is %1", sd.mlen)
-    elseif sd.readstate == STATE_READDATA then
-        sd.msg = sd.msg .. string.char( b )
-        sd.mlen = sd.mlen - 1
-        if debugMode and sd.mlen % 2500 == 0 then D("handleIncomingByte() reading message, %1 bytes to go", sd.mlen) end
-        if sd.mlen <= 0 then
-            local delta = math.max( socket.gettime() - sd.start, 0.001 )
-            D("handleIncomingByte() message received, %1 bytes in %2 secs, %3 bytes/sec", sd.size, delta, sd.size / delta)
-            handleIncomingMessage( sd.opcode, sd.msg, server )
-            sd.readstate = STATE_START
-        end
     elseif sd.readstate == STATE_SYNC then
         -- Need to resync. Look for a ping (opcode 9, fin set, length 0)
         if b == 0x89 then
@@ -1104,6 +1105,15 @@ local function launchUpdate( server, task )
         wssend( 1, { MessageType="SessionsStart", Data="5000,5000" }, server )
         local ra,rb,rc,rd = luup.call_action( SERVERSID, "Update", {}, server )
         D("launchUpdate() return from Update action %1,%2,%3,%4", ra,rb,rc,rd)
+        local msg = string.char( 0x89 )
+        msg = msg .. string.char( 126 )
+        msg = msg .. string.char( 32768 / 256 )
+        msg = msg .. string.char( 0 )
+        handleIncoming( msg, server )
+        local ch = string.char( 65 )
+        for ix=1,32768 do
+            handleIncoming( ch, server )
+        end
     else
         D("launchUpdate() server %1 not ready, waiting", server)
         scheduleDelay( task, 5 )
@@ -1173,8 +1183,8 @@ local function startServer( server )
 
         -- Launch websocket
         local addr = luup.variable_get( SERVERSID, "LocalAddress", server ) or "http://127.0.0.1:8096"
-        wsopen( addr, server )
-        if wsconnect( server ) then
+        -- wsopen( addr, server )
+        if false and wsconnect( server ) then
             -- scheduleDelay( { id=tostring(server), owner=server, info="sessionupdate", func=updateSessions }, 120 )
             D("startServer() server %1 successful WebSocket startup", server)
             scheduleDelay( { id=tostring(server), owner=server, info="launchupdate", func=launchUpdate }, 5 )
