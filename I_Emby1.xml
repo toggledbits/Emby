@@ -28,8 +28,9 @@
     </functions>
     <incoming>
         <lua>
-            if EmbyPlugin.firstbyte then
-                EmbyPlugin.firstbyte = false
+            --[[
+            if not EmbyPlugin.seenbyte then
+                EmbyPlugin.seenbyte = true
                 luup.log( debug.traceback(), 2 )
                 for ix=1,16 do
                     local lvar = debug.getlocal(1,ix)
@@ -37,6 +38,7 @@
                     luup.log( EmbyPlugin.dump( { lvar=lvar } ), 2 )
                 end
             end
+            --]]
             EmbyPlugin.handleIncoming( lul_data, lul_device )
         </lua>
     </incoming>

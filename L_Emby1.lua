@@ -9,8 +9,6 @@ module("L_Emby1", package.seeall)
 
 local debugMode = false
 
-firstbyte = true -- ??? temporary
-
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
 local _PLUGIN_VERSION = "1.1develop"
@@ -51,7 +49,7 @@ local STATE_READLEN161 = "len16-1"
 local STATE_READLEN162 = "len16-2"
 local STATE_READDATA = "data"
 local STATE_SYNC = "sync"
-local STATE_SYNC = "resync"
+local STATE_RESYNC = "resync"
 local STATE_ERROR = "error"
 
 local handleIncomingMessage
@@ -253,7 +251,7 @@ local function handleIncomingByte( b, ch, server )
             sd.readstate = STATE_SYNC
         else
             D("handleIncomingByte() short length, expecting %1 byte payload", sd.mlen)
-            sd.size = mlen
+            sd.size = sd.mlen
             if sd.mlen > 0 then
                 -- Transition to reading data.
                 sd.readstate = STATE_READDATA
@@ -946,7 +944,7 @@ handleIncomingMessage = function( op, msg, server )
     setVar( SERVERSID, "LastUpdate", os.time(), server )
 
     -- Create a map of child sessions for this server.
-    local cs = getChildDevices( SESSIONTYPE, nil, function( dev, devobj )
+    local cs = getChildDevices( SESSIONTYPE, nil, function( dev, _ )
         local ps = getVarNumeric( "Server", 0, dev, SESSIONSID )
         return ps == server
     end )
@@ -1193,7 +1191,7 @@ local function startServer( server )
 
         -- Launch websocket
         local addr = luup.variable_get( SERVERSID, "LocalAddress", server ) or "http://127.0.0.1:8096"
-        if wsopen( addr, server ) and wsconnect( server ) then
+        if not isOpenLuup and ( wsopen( addr, server ) and wsconnect( server ) ) then
             D("startServer() server %1 successful WebSocket startup", server)
             scheduleDelay( { id=tostring(server), owner=server, info="launchupdate", func=launchUpdate }, 5 )
         else
@@ -1979,7 +1977,6 @@ function startPlugin( pdev )
     luup.variable_set( MYSID, "Message", "Initializing...", pdev )
 
     -- Early inits
-firstbyte = true -- ???
     pluginDevice = pdev
     isALTUI = false
     isOpenLuup = false
