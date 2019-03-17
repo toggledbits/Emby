@@ -1,7 +1,7 @@
 {
 	"__comment": [
 		"D_Emby1_UI7.json",
-		"Copyright (c) 2018 Patrick H. Rigney, All Rights Reserved"
+		"Copyright 2018,2019 Patrick H. Rigney, All Rights Reserved"
 	],
 	"default_icon": "https://www.toggledbits.com/assets/emby/emby-plugin.png",
 	"state_icons": [],
@@ -55,92 +55,92 @@
 					},
 					"ControlCode": "message"
 				},
-                {
-                    "ControlType": "button",
-                    "top": "2",
-                    "left": "0",
-                    "Label": {
-                        "lang_tag": "cmd_emby_discovery",
-                        "text": "Run Discovery"
-                    },
-                    "Display": {
-                        "Top": 30,
-                        "Left": 0,
-                        "Width": 120,
-                        "Height": 25
-                    },
-                    "Command": {
-                        "Service": "urn:toggledbits-com:serviceId:Emby1",
-                        "Action": "RunDiscovery",
-                        "Parameters": []
-                    },
-                    "ControlCode": "run_discovery"
-                },
-                {
-                    "ControlType": "label",
-                    "top": "0.2",
-                    "left": "0",
-                    "Label": {
-                        "lang_tag": "emby_ex_discovery",
-                        "text": "This form of discovery uses the Emby discovery protocol to find servers in your local network. Try this first."
-                    },
-                    "Display": {
-                        "Top": 30,
-                        "Left": 150,
-                        "Width": 480,
-                        "Height": 75
-                    }
-                },
+				{
+					"ControlType": "button",
+					"top": "2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "cmd_emby_discovery",
+						"text": "Run Discovery"
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 0,
+						"Width": 120,
+						"Height": 25
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:Emby1",
+						"Action": "RunDiscovery",
+						"Parameters": []
+					},
+					"ControlCode": "run_discovery"
+				},
+				{
+					"ControlType": "label",
+					"top": "0.2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "emby_ex_discovery",
+						"text": "This form of discovery uses the Emby discovery protocol to find servers in your local network. Try this first."
+					},
+					"Display": {
+						"Top": 30,
+						"Left": 150,
+						"Width": 480,
+						"Height": 75
+					}
+				},
 
-                {
-                    "ControlType": "input",
-                    "ID": "ipaddr",
-                    "Display": {
-                        "Top": 90,
-                        "Left": 0,
-                        "Width": 120,
-                        "Height": 24
-                    }
-                },
-                {
-                    "ControlType": "button",
-                    "top": "2",
-                    "left": "0",
-                    "Label": {
-                        "lang_tag": "cmd_emby_discip",
-                        "text": "Discover IP"
-                    },
-                    "Display": {
-                        "Top": 90,
-                        "Left": 150,
-                        "Width": 120,
-                        "Height": 25
-                    },
-                    "Command": {
-                        "Service": "urn:toggledbits-com:serviceId:Emby1",
-                        "Action": "DiscoverIP",
-                        "Parameters": [{
-                            "Name": "IPAddress",
-                            "ID": "ipaddr"
-                        }]
-                    },
-                    "ControlCode": "run_discip"
-                },
-                {
-                    "ControlType": "label",
-                    "top": "0.2",
-                    "left": "0",
-                    "Label": {
-                        "lang_tag": "emby_ex_discip",
-                        "text": "If your server can't be located via discovery or login, and it has a fixed IP address (via a DHCP reservation or static configuration), enter its IP address here and press \"Discover IP\". You will need to manually generate and assign an API Key."
-                    },
-                    "Display": {
-                        "Top": 120,
-                        "Left": 0,
-                        "Width": 630,
-                        "Height": 48
-                    }
-                },
+				{
+					"ControlType": "input",
+					"ID": "ipaddr",
+					"Display": {
+						"Top": 90,
+						"Left": 0,
+						"Width": 120,
+						"Height": 24
+					}
+				},
+				{
+					"ControlType": "button",
+					"top": "2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "cmd_emby_discip",
+						"text": "Discover IP"
+					},
+					"Display": {
+						"Top": 90,
+						"Left": 150,
+						"Width": 120,
+						"Height": 25
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:Emby1",
+						"Action": "DiscoverIP",
+						"Parameters": [{
+							"Name": "IPAddress",
+							"ID": "ipaddr"
+						}]
+					},
+					"ControlCode": "run_discip"
+				},
+				{
+					"ControlType": "label",
+					"top": "0.2",
+					"left": "0",
+					"Label": {
+						"lang_tag": "emby_ex_discip",
+						"text": "If your server can't be located via discovery or login, and it has a fixed IP address (via a DHCP reservation or static configuration), enter its IP address here and press \"Discover IP\". You will need to manually generate and assign an API Key."
+					},
+					"Display": {
+						"Top": 120,
+						"Left": 0,
+						"Width": 630,
+						"Height": 48
+					}
+				},
 				{
 					"ControlType": "label",
 					"Display": {
@@ -164,7 +164,7 @@
 					},
 					"Label": {
 						"lang_tag": "tb_emby_about",
-						"text": "Emby ver 1.1develop &#169; 2018 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,118013.0.html\" target=\"_blank\">Support Forum Thread</a> &#149; <a href=\"https://github.com/toggledbits/Emby/\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Emby&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
+						"text": "Emby ver 1.1 &#169; 2018,2019 Patrick H. Rigney, All Rights Reserved.<br/><a href=\"http://forum.micasaverde.com/index.php/topic,118013.0.html\" target=\"_blank\">Support Forum Thread</a> &#149; <a href=\"https://github.com/toggledbits/Emby/\" target=\"_blank\">Documentation and license information</a>.<br>&nbsp;<br>Support links: <a href=\"/port_3480/data_request?id=lr_Emby&action=status\" target=\"_blank\">Plugin&nbsp;Status</a> &#149; <a href=\"/cgi-bin/cmh/log.sh?Device=LuaUPnP\" target=\"_blank\">Show&nbsp;Log</a>"
 					}
 				}
 			],
