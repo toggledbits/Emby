@@ -88,6 +88,28 @@
 						"Parameters": []
 					}
 				},{
+					"ControlType": "button",
+					"top": 0,
+					"left": 1,
+					"Label": {
+						"lang_tag": "cmd_resume",
+						"text": "Resume"
+					},
+					"Display": {
+						"Service": "urn:toggledbits-com:serviceId:EmbySession1",
+						"Variable": "TransportState",
+						"Value": "STOPPED",
+						"Top": 30,
+						"Left": 150,
+						"Width": 60,
+						"Height": 20
+					},
+					"Command": {
+						"Service": "urn:toggledbits-com:serviceId:EmbySession1",
+						"Action": "ResumeMedia",
+						"Parameters": []
+					}
+				},{
 					"ControlGroup": 2,
 					"ControlType": "button",
 					"top": 1,
