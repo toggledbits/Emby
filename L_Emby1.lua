@@ -51,7 +51,14 @@ local STATE_SYNC = "sync"
 local STATE_RESYNC = "resync"
 local STATE_ERROR = "error"
 
+-- FORWARD DECLARATIONS
 local handleIncomingMessage
+local urlencode
+-- END FORWARD
+
+local TTSProvider = {
+    ResponsiveVoice={ url="https://code.responsivevoice.org/getvoice.php?t=%s&tl=en-US", preprocess=urlencode }
+}
 
 function dump(t, seen)
     if t == nil then return "nil" end
@@ -377,7 +384,7 @@ local function checkVersion(dev)
     return false
 end
 
-local function urlencode( str )
+urlencode = function( str )
     str = tostring(str):gsub( "([^A-Za-z0-9_ -])", function( ch ) return string.format("%%%02x", string.byte( ch ) ) end )
     return str:gsub( " ", "+" )
 end
@@ -1285,6 +1292,7 @@ local function getSystemIP4BCast( dev )
     local a1,a2,a3,a4 = vera_ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)")
     local m1,m2,m3,m4 = mask:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)")
     -- Yeah. This is my jam, baby!
+    local bit = require "bit"
     a1 = bit.bor(bit.band(a1,m1), bit.bxor(m1,255))
     a2 = bit.bor(bit.band(a2,m1), bit.bxor(m2,255))
     a3 = bit.bor(bit.band(a3,m3), bit.bxor(m3,255))
