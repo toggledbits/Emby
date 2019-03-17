@@ -11,7 +11,7 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "1.1develop"
+local _PLUGIN_VERSION = "1.1"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
 local _CONFIGVERSION = 000101
 
