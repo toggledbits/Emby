@@ -1,60 +1,60 @@
 <?xml version="1.0"?>
 <!-- S_Emby1.xml -->
 <scpd xmlns="urn:schemas-upnp-org:service-1-0">
-    <specVersion>
-        <major>1</major>
-        <minor>0</minor>
-    </specVersion>
-    <serviceStateTable>
-        <stateVariable sendEvents="yes">
-            <name>Message</name>
-            <dataType>string</dataType>
-            <defaultValue></defaultValue>
-            <shortCode>message</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>DebugMode</name>
-            <dataType>boolean</dataType>
-            <defaultValue>0</defaultValue>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_string</name>
-            <dataType>string</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_boolean</name>
-            <dataType>boolean</dataType>
-        </stateVariable>
-    </serviceStateTable>
-    <actionList>
-        <action>
-            <name>RunDiscovery</name>
-            <argumentList>
-            </argumentList>
-        </action>
-        <action>
-            <name>DiscoverIP</name>
-            <argumentList>
-                <argument>
-                   <name>IPAddress</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>SetDebug</name>
-            <argumentList>
-                <argument>
-                    <name>debug</name>
-                    <direction>in</direction>
-                    <relatedStateVariable>DebugMode</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>Clear1</name>
-            <argumentList/>
-        </action>
-    </actionList>
+	<specVersion>
+		<major>1</major>
+		<minor>0</minor>
+	</specVersion>
+	<serviceStateTable>
+		<stateVariable sendEvents="yes">
+			<name>Message</name>
+			<dataType>string</dataType>
+			<defaultValue></defaultValue>
+			<shortCode>message</shortCode>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>DebugMode</name>
+			<dataType>boolean</dataType>
+			<defaultValue>0</defaultValue>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_string</name>
+			<dataType>string</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_boolean</name>
+			<dataType>boolean</dataType>
+		</stateVariable>
+	</serviceStateTable>
+	<actionList>
+		<action>
+			<name>RunDiscovery</name>
+			<argumentList>
+			</argumentList>
+		</action>
+		<action>
+			<name>DiscoverIP</name>
+			<argumentList>
+				<argument>
+				   <name>IPAddress</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>SetDebug</name>
+			<argumentList>
+				<argument>
+					<name>debug</name>
+					<direction>in</direction>
+					<relatedStateVariable>DebugMode</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>Clear1</name>
+			<argumentList/>
+		</action>
+	</actionList>
 </scpd>
