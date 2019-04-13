@@ -120,9 +120,16 @@ The `ViewMedia` action moves the client's user interface to the given media item
 * `Title` (required if `Id` is not specified) - The title of the media item;
 * `MediaType` (optional) - The Emby media type of the item (only used when Title is given and Id is not), to help narrow the search result.
 
+#### BookmarkMedia
+The `BookmarkMedia` action takes the current media item and position playing on a session and bookmarks it under the name given in the (solitary) `Bookmark` parameter. The media item can be resumed from the saved position invoking the `ResumeMedia` action with the bookmark name in its `Bookmark` parameter.
+
+Bookmarks are stored in the server device, so a bookmark created in one session can be resumed in another, as long as the two sessions belong to the same server. For example, you can bookmark a movie on your phone, pause it, and then go resume it on your TV.
+
 #### ResumeMedia
 
 The `ResumeMedia` action is a plugin-provided enhancement. Currently, Emby servers do not offer API access to the queue of clients--we can see the media item that is currently playing, but not what played previously or may be playing next. As a result, when you `Stop` play on an Emby session, there is no Emby way to resume plaing the full queue (as one can do on Sonos, for example, where the queue is treated as a persistent, anonymous playlist). The action simply restarts play of the last known playing media item at the last checkpoint recorded. The optional `Restart` parameter may be given as "1" to force the media item to start playing from its beginning rather than the checkpoint.
+
+The *optional* `Bookmark` parameter, when given, will resume the media item associated with the bookmark at the bookmarked position. See `BookmarkMedia` above.
 
 #### SetVolume
 

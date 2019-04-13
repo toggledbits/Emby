@@ -1,252 +1,269 @@
 <?xml version="1.0"?>
 <!-- S_EmbySession1.xml -->
 <scpd xmlns="urn:schemas-upnp-org:service-1-0">
-    <specVersion>
-        <major>1</major>
-        <minor>0</minor>
-    </specVersion>
-    <serviceStateTable>
-        <stateVariable sendEvents="yes">
-            <name>Message</name>
-            <dataType>string</dataType>
-            <defaultValue></defaultValue>
-            <shortCode>message</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>DeviceName</name>
-            <dataType>string</dataType>
-            <defaultValue>Emby Server</defaultValue>
-            <shortCode>devicename</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>DeviceId</name>
-            <dataType>string</dataType>
-            <defaultValue>Emby Server</defaultValue>
-            <shortCode>deviceid</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>Client</name>
-            <dataType>string</dataType>
-            <defaultValue>unknown</defaultValue>
-            <shortCode>client</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>Version</name>
-            <dataType>string</dataType>
-            <defaultValue>unknown</defaultValue>
-            <shortCode>appversion</shortCode>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>LocalAddress</name>
-            <dataType>string</dataType>
-            <defaultValue></defaultValue>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>VolumePercent</name>
-            <dataType>ui1</dataType>
-            <defaultValue>100</defaultValue>
-            <allowedValueRange>
-                <minimum>0</minimum>
-                <maximum>100</maximum>
-            </allowedValueRange>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>TransportState</name>
-            <dataType>string</dataType>
-            <defaultValue>STOPPED</defaultValue>
-            <shortCode>transportstate</shortCode>
-            <allowedValueList>
-                <allowedValue>STOPPED</allowedValue>
-                <allowedValue>PLAYING</allowedValue>
-                <allowedValue>PAUSED</allowedValue>
-            </allowedValueList>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>DisplayPosition</name>
-            <dataType>string</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>DisplayStatus</name>
-            <dataType>string</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>PlayingItemId</name>
-            <dataType>string</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>PlayingItemRuntime</name>
-            <dataType>r4</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="yes">
-            <name>PlayingItemPosition</name>
-            <dataType>r4</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_string</name>
-            <dataType>string</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_ui4</name>
-            <dataType>ui4</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_boolean</name>
-            <dataType>boolean</dataType>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_mediatype</name>
-            <dataType>string</dataType>
-            <allowedValueList>
-                <allowedValue>Audio</allowedValue>
-                <allowedValue>BoxSet</allowedValue>
-                <allowedValue>MusicAlbum</allowedValue>
-                <allowedValue>Artist</allowedValue>
-                <allowedValue>Season</allowedValue>
-                <allowedValue>Series</allowedValue>
-                <allowedValue>Movie</allowedValue>
-                <allowedValue>Edisode</allowedValue>
-                <allowedValue>Trailer</allowedValue>
-                <allowedValue>MusicVideo</allowedValue>
-                <allowedValue>AdultVideo</allowedValue>
-                <allowedValue>Video</allowedValue>
-                <allowedValue>Game</allowedValue>
-                <allowedValue>GameSystem</allowedValue>
-                <allowedValue>Photo</allowedValue>
-                <allowedValue>Book</allowedValue>
-                <allowedValue>Playlist</allowedValue>
-                <allowedValue>Folder</allowedValue>
-            </allowedValueList>
-        </stateVariable>
-        <stateVariable sendEvents="no">
-            <name>A_ARG_TYPE_playcommand</name>
-            <dataType>string</dataType>
-            <defaultValue>PlayNow</defaultValue>
-            <Optional/>
-            <allowedValueList>
-                <allowedValue>PlayNow</allowedValue>
-                <allowedValue>PlayNext</allowedValue>
-                <allowedValue>PlayLast</allowedValue>
-            </allowedValueList>
-        </stateVariable>
-    </serviceStateTable>
-    <actionList>
-        <action>
-            <name>PlayMedia</name>
-            <!-- Specify one of Id, Path, Title; Id may contain comma-sep list -->
-            <argumentList>
-                <argument>
-                   <name>Id</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>Title</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>MediaType</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>PlayCommand</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_playcommand</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>Limit</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <!-- Toggle pause state -->
-            <name>PlayPause</name>
-            <argumentList/>
-        </action>
-        <action>
-            <name>ViewMedia</name>
-            <argumentList>
-                <argument>
-                   <name>Id</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                   <optional/>
-                </argument>
-                <argument>
-                   <name>Title</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                   <optional/>
-                </argument>
-                <argument>
-                   <name>MediaType</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
-                   <optional/>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>ResumeMedia</name>
-            <argumentList>
-                <argument>
-                    <name>Restart</name>
-                    <direction>in</direction>
-                    <relatedStateVariable>A_ARG_TYPE_boolean</relatedStateVariable>
-                    <optional/>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <!-- Refresh data from server -->
-            <name>Refresh</name>
-            <argumentList/>
-        </action>
-        <action>
-            <!-- Set volume 0-100 -->
-            <name>SetVolume</name>
-            <argumentList>
-                <argument>
-                   <name>Volume</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>VolumePercent</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <name>GetVolume</name>
-            <argumentList>
-                <argument>
-                   <name>Volume</name>
-                   <direction>out</direction>
-                   <relatedStateVariable>VolumePercent</relatedStateVariable>
-                   <retval/>
-                </argument>
-            </argumentList>
-        </action>
-        <action>
-            <!-- Display message on client -->
-            <name>Message</name>
-            <argumentList>
-                <argument>
-                   <name>Text</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>Header</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
-                </argument>
-                <argument>
-                   <name>TimeoutMs</name>
-                   <direction>in</direction>
-                   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
-                </argument>
-            </argumentList>
-        </action>
-    </actionList>
+	<specVersion>
+		<major>1</major>
+		<minor>0</minor>
+	</specVersion>
+	<serviceStateTable>
+		<stateVariable sendEvents="yes">
+			<name>Message</name>
+			<dataType>string</dataType>
+			<defaultValue></defaultValue>
+			<shortCode>message</shortCode>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>DeviceName</name>
+			<dataType>string</dataType>
+			<defaultValue>Emby Server</defaultValue>
+			<shortCode>devicename</shortCode>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>DeviceId</name>
+			<dataType>string</dataType>
+			<defaultValue>Emby Server</defaultValue>
+			<shortCode>deviceid</shortCode>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>Client</name>
+			<dataType>string</dataType>
+			<defaultValue>unknown</defaultValue>
+			<shortCode>client</shortCode>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>Version</name>
+			<dataType>string</dataType>
+			<defaultValue>unknown</defaultValue>
+			<shortCode>appversion</shortCode>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>LocalAddress</name>
+			<dataType>string</dataType>
+			<defaultValue></defaultValue>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>VolumePercent</name>
+			<dataType>ui1</dataType>
+			<defaultValue>100</defaultValue>
+			<allowedValueRange>
+				<minimum>0</minimum>
+				<maximum>100</maximum>
+			</allowedValueRange>
+		</stateVariable>
+		<stateVariable sendEvents="yes">
+			<name>TransportState</name>
+			<dataType>string</dataType>
+			<defaultValue>STOPPED</defaultValue>
+			<shortCode>transportstate</shortCode>
+			<allowedValueList>
+				<allowedValue>STOPPED</allowedValue>
+				<allowedValue>PLAYING</allowedValue>
+				<allowedValue>PAUSED</allowedValue>
+			</allowedValueList>
+		</stateVariable>
+		<stateVariable sendEvents="yes">
+			<name>DisplayPosition</name>
+			<dataType>string</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="yes">
+			<name>DisplayStatus</name>
+			<dataType>string</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="yes">
+			<name>PlayingItemId</name>
+			<dataType>string</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>PlayingItemRuntime</name>
+			<dataType>r4</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="yes">
+			<name>PlayingItemPosition</name>
+			<dataType>r4</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_string</name>
+			<dataType>string</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_ui4</name>
+			<dataType>ui4</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_boolean</name>
+			<dataType>boolean</dataType>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_mediatype</name>
+			<dataType>string</dataType>
+			<allowedValueList>
+				<allowedValue>Audio</allowedValue>
+				<allowedValue>BoxSet</allowedValue>
+				<allowedValue>MusicAlbum</allowedValue>
+				<allowedValue>Artist</allowedValue>
+				<allowedValue>Season</allowedValue>
+				<allowedValue>Series</allowedValue>
+				<allowedValue>Movie</allowedValue>
+				<allowedValue>Edisode</allowedValue>
+				<allowedValue>Trailer</allowedValue>
+				<allowedValue>MusicVideo</allowedValue>
+				<allowedValue>AdultVideo</allowedValue>
+				<allowedValue>Video</allowedValue>
+				<allowedValue>Game</allowedValue>
+				<allowedValue>GameSystem</allowedValue>
+				<allowedValue>Photo</allowedValue>
+				<allowedValue>Book</allowedValue>
+				<allowedValue>Playlist</allowedValue>
+				<allowedValue>Folder</allowedValue>
+			</allowedValueList>
+		</stateVariable>
+		<stateVariable sendEvents="no">
+			<name>A_ARG_TYPE_playcommand</name>
+			<dataType>string</dataType>
+			<defaultValue>PlayNow</defaultValue>
+			<Optional/>
+			<allowedValueList>
+				<allowedValue>PlayNow</allowedValue>
+				<allowedValue>PlayNext</allowedValue>
+				<allowedValue>PlayLast</allowedValue>
+			</allowedValueList>
+		</stateVariable>
+	</serviceStateTable>
+	<actionList>
+		<action>
+			<name>PlayMedia</name>
+			<!-- Specify one of Id, Path, Title; Id may contain comma-sep list -->
+			<argumentList>
+				<argument>
+				   <name>Id</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+				   <name>Title</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+				   <name>MediaType</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
+				</argument>
+				<argument>
+				   <name>PlayCommand</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_playcommand</relatedStateVariable>
+				</argument>
+				<argument>
+				   <name>Limit</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<!-- Toggle pause state -->
+			<name>PlayPause</name>
+			<argumentList/>
+		</action>
+		<action>
+			<name>ViewMedia</name>
+			<argumentList>
+				<argument>
+				   <name>Id</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				   <optional/>
+				</argument>
+				<argument>
+				   <name>Title</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				   <optional/>
+				</argument>
+				<argument>
+				   <name>MediaType</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_mediatype</relatedStateVariable>
+				   <optional/>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>ResumeMedia</name>
+			<argumentList>
+				<argument>
+				   <name>Bookmark</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				   <optional/>
+				</argument>
+				<argument>
+					<name>Restart</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_boolean</relatedStateVariable>
+					<optional/>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>BookmarkMedia</name>
+			<argumentList>
+				<argument>
+					<name>Bookmark</name>
+					<direction>in</direction>
+					<relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+					<optional/>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<!-- Refresh data from server -->
+			<name>Refresh</name>
+			<argumentList/>
+		</action>
+		<action>
+			<!-- Set volume 0-100 -->
+			<name>SetVolume</name>
+			<argumentList>
+				<argument>
+				   <name>Volume</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>VolumePercent</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<name>GetVolume</name>
+			<argumentList>
+				<argument>
+				   <name>Volume</name>
+				   <direction>out</direction>
+				   <relatedStateVariable>VolumePercent</relatedStateVariable>
+				   <retval/>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
+			<!-- Display message on client -->
+			<name>Message</name>
+			<argumentList>
+				<argument>
+				   <name>Text</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+				   <name>Header</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_string</relatedStateVariable>
+				</argument>
+				<argument>
+				   <name>TimeoutMs</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+	</actionList>
 </scpd>

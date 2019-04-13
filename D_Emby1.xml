@@ -1,29 +1,29 @@
 <?xml version="1.0"?>
 <!-- D_Emby1.xml -->
 <root xmlns="urn:schemas-upnp-org:device-1-0">
-    <specVersion>
-        <major>1</major>
-        <minor>0</minor>
-    </specVersion>
-    <device>
-        <deviceType>urn:schemas-toggledbits-com:device:Emby:1</deviceType>
-        <staticJson>D_Emby1_UI7.json</staticJson>
-        <friendlyName>Emby Plugin</friendlyName>
-        <manufacturer>rigpapa</manufacturer>
-        <manufacturerURL>http://www.toggledbits.com/emby/</manufacturerURL>
-        <modelDescription></modelDescription>
-        <modelName>Emby Plugin</modelName>
-        <handleChildren>1</handleChildren>
-        <Category_Num>1</Category_Num>
-        <serviceList>
-          <service>
-            <serviceType>urn:schemas-toggledbits-com:service:Emby:1</serviceType>
-            <serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
-            <SCPDURL>S_Emby1.xml</SCPDURL>
-          </service>
-        </serviceList>
-        <implementationList>
-          <implementationFile>I_Emby1.xml</implementationFile>
-        </implementationList>
-    </device>
+	<specVersion>
+		<major>1</major>
+		<minor>0</minor>
+	</specVersion>
+	<device>
+		<deviceType>urn:schemas-toggledbits-com:device:Emby:1</deviceType>
+		<staticJson>D_Emby1_UI7.json</staticJson>
+		<friendlyName>Emby Plugin</friendlyName>
+		<manufacturer>rigpapa</manufacturer>
+		<manufacturerURL>http://www.toggledbits.com/emby/</manufacturerURL>
+		<modelDescription></modelDescription>
+		<modelName>Emby Plugin</modelName>
+		<handleChildren>1</handleChildren>
+		<Category_Num>1</Category_Num>
+		<serviceList>
+		  <service>
+			<serviceType>urn:schemas-toggledbits-com:service:Emby:1</serviceType>
+			<serviceId>urn:toggledbits-com:serviceId:Emby1</serviceId>
+			<SCPDURL>S_Emby1.xml</SCPDURL>
+		  </service>
+		</serviceList>
+		<implementationList>
+		  <implementationFile>I_Emby1.xml</implementationFile>
+		</implementationList>
+	</device>
 </root>
