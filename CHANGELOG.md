@@ -1,5 +1,10 @@
 # Change Log
 
+## Version 1.2 (develop)
+
+* Add action BookmarkMedia, which allows the user to bookmark the current playing media/position (parameter "Bookmark" is the name used to save). Bookmarks are global to the server, so bookmarks can be resumed (using ResumeMedia) on any session (i.e. you can bookmark a movie on your phone and continue watching from that spot on your TV).
+* Add "Bookmark" parameter to ResumeMedia action, to allow user to resume from a position previously bookmarked by BookmarkMedia.
+
 ## Version 1.1 (released)
 
 * Code cleanup and fix a number of small bugs.
