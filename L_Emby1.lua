@@ -1276,11 +1276,6 @@ function actionSessionResumeMedia( pdev, restart, bookmark )
 	local sess = luup.devices[pdev].id
 	local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
 	local state = luup.variable_get( SESSIONSID, "TransportState", pdev ) or ""
-	if state ~= "STOPPED" then
-		L({level=2,msg="%1 (%2) can't ResumeMedia, already playing (%3)"},
-			luup.devices[pdev].description, pdev, state)
-		return false
-	end
 
 	-- Fetch bookmark if specified, otherwise use current ResumePoint
 	if bookmark then
@@ -1292,6 +1287,11 @@ function actionSessionResumeMedia( pdev, restart, bookmark )
 			return false
 		end
 	else
+		if state ~= "STOPPED" then
+			L({level=2,msg="%1 (%2) can't ResumeMedia, already playing (%3)"},
+				luup.devices[pdev].description, pdev, state)
+			return false
+		end
 		state = luup.variable_get( SESSIONSID, "ResumePoint", pdev ) or ""
 	end
 	state = split( state )

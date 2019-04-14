@@ -113,7 +113,7 @@
 			<serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
 			<name>BookmarkMedia</name>
 			<run>
-				return EmbyPlugin.actionSessionBookmarkMedia( lul_device, lul_settings.Bookmark ) then
+				return EmbyPlugin.actionSessionBookmarkMedia( lul_device, lul_settings.Bookmark )
 			</run>
 		</action>
 		<action>
