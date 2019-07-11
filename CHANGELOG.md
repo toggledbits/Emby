@@ -1,5 +1,9 @@
 # Change Log
 
+## Version 1.3 (development)
+
+* Enhancement/workaround: Emby clients may not present the same UUID. In particular, the web browsers will often present a new UUID after clearing browser caches, etc. This can result in a proliferation of client devices on Vera, as each new UUID is handled as a new client. Work around this by filtering out those clients using the new `FilterClients` and `FilterDeviceNames` state variables, which may contain a list of Lua patterns to match against the Client string or Device Name, respectively. By default, client "Emby Mobile" is now filtered out, elimination Chrome/Firefox/etc. from default display. If the user wishes to see these clients, the filter variables may be adjusted accordingly.
+
 ## Version 1.2 (released)
 
 * Add action BookmarkMedia, which allows the user to bookmark the current playing media/position (parameter "Bookmark" is the name used to save). Bookmarks are global to the server, so bookmarks can be resumed (using ResumeMedia) on any session (i.e. you can bookmark a movie on your phone and continue watching from that spot on your TV).

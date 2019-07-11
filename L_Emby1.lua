@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "1.2"
+local _PLUGIN_VERSION = "1.3develop-19192"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
-local _CONFIGVERSION = 19103
+local _CONFIGVERSION = 19192
 
 local math = require "math"
 local string = require "string"
@@ -560,10 +560,23 @@ local function updateSession( sdata, session, server )
 	end
 end
 
-local function isControllableSession( sess )
+local function matchesFilterList( str, lstr )
+	if ( lstr or "" ) == "" then return false end
+	local fl = split( lstr, "|" )
+	for _,f in ipairs( fl or {} ) do
+		if str:match( f ) then return true end
+	end
+	return false
+end
+
+local function isControllableSession( sess, server )
 	if not sess.SupportsRemoteControl then return false, 1 end
 	local client = tostring( sess.Client or "" ):lower()
 	if client:match( "^vera emby" ) then return false, 2 end
+	local s = luup.variable_get( SERVERSID, "FilterClients", server ) or ""
+	if matchesFilterList( client, s ) then return false, 3 end
+	s = luup.variable_get( SERVERSID, "FilterDeviceNames", server ) or ""
+	if matchesFilterList( tostring( sess.DeviceName or "" ):lower(), s ) then return false, 4 end
 	return true
 end
 
@@ -604,7 +617,7 @@ local function updateSessions( server, taskid )
 		-- Iterate over response data
 		D("updateSessions() server returned %1 sessions", #(data or {}))
 		for _,sess in ipairs( data or {} ) do
-			if isControllableSession( sess ) then
+			if isControllableSession( sess, server ) then
 				D("updateSessions() updating session %1 (%2)", sess.DeviceName, sess.Id)
 				local child = childSessions[ sess.Id ]
 				if child then
@@ -691,9 +704,10 @@ local function inventorySessions( server )
 		D("inventorySessions() childSessions=%1", childSessions)
 		local newSessions = {}
 		for _,sess in ipairs( data or {} ) do
-			if not isControllableSession( sess ) then
-				L("Session %1 (%2) client %3 version %4, not supported (skipped)",
-					sess.DeviceName, sess.Id, sess.Client, sess.ApplicationVersion)
+			local canDo,reason = isControllableSession( sess, server )
+			if not canDo then
+				L("Session %1 (%2) client %3 version %4, not supported/filtered (%5)",
+					sess.DeviceName, sess.Id, sess.Client, sess.ApplicationVersion, reason)
 			else
 				local child = childSessions[ sess.Id ]
 				if not child then
@@ -762,10 +776,12 @@ local function initServer( server )
 	initVar( "HideOffline", "0", server, SERVERSID )
 	initVar( "HideIdle", "0", server, SERVERSID )
 	initVar( "Bookmarks", "{}", server, SERVERSID )
-
+	initVar( "FilterClients", "^emby mobile", server, SERVERSID )
+	initVar( "FilterDeviceNames", "", server, SERVERSID )
 	if getVarNumeric( "Version", 0, server, SERVERSID ) < 000101 then
 		luup.attr_set( 'category_num', 1, server )
 	end
+	
 	setVar( SERVERSID, "Version", _CONFIGVERSION, server )
 end
 
