@@ -1,6 +1,6 @@
 # Change Log
 
-## Version 1.3 (development)
+## Version 1.3 (released)
 
 * Enhancement/workaround: Emby clients may not present the same UUID. In particular, the web browsers will often present a new UUID after clearing browser caches, etc. This can result in a proliferation of client devices on Vera, as each new UUID is handled as a new client. Work around this by filtering out those clients using the new `FilterClients` and `FilterDeviceNames` state variables, which may contain a list of Lua patterns to match against the Client string or Device Name, respectively. By default, client "Emby Mobile" is now filtered out, elimination Chrome/Firefox/etc. from default display. If the user wishes to see these clients, the filter variables may be adjusted accordingly.
 

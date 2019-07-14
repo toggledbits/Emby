@@ -11,7 +11,7 @@
 
 var EmbyServer = (function(api, $) {
 
-	var pluginVersion = '1.3develop-19192';
+	var pluginVersion = '1.3';
 
 	/* unique identifier for this plugin... */
 	var uuid = 'fbef24d8-0bc1-11e9-b678-74d4351650de'; //EmbyServer190103
