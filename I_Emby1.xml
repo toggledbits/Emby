@@ -146,6 +146,13 @@
 				return EmbyPlugin.actionSessionRefresh( lul_device )
 			</run>
 		</action>
+		<action>
+			<serviceId>urn:toggledbits-com:serviceId:EmbySession1</serviceId>
+			<name>Wakeup</name>
+			<run>
+				return EmbyPlugin.actionSessionWakeup( lul_device, (lul_settings or {}).duration )
+			</run>
+		</action>
 
 		<action>
 			<serviceId>urn:micasaverde-com:serviceId:MediaNavigation1</serviceId>

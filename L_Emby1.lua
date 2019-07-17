@@ -11,9 +11,9 @@ local debugMode = false
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "1.3"
+local _PLUGIN_VERSION = "1.4develop-19198"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
-local _CONFIGVERSION = 19192
+local _CONFIGVERSION = 19198
 
 local math = require "math"
 local string = require "string"
@@ -445,6 +445,7 @@ local function initSession( sess )
 	initVar( "TransportState", "STOPPED", sess, SESSIONSID )
 	initVar( "SmartSkipDefault", "", sess, SESSIONSID )
 	initVar( "SmartSkipGrace", "", sess, SESSIONSID )
+	initVar( "SessionTimeout", "60", sess, SESSIONSID )
 
 	if getVarNumeric( "Version", 0, sess, SESSIONSID ) < 000101 then
 		luup.attr_set( 'category_num', 15, sess )
@@ -466,6 +467,7 @@ local function clearPlayingState( child )
 	setVar( SESSIONSID, "DisplayPosition", "--:-- / --:--", child )
 	setVar( SESSIONSID, "DisplayStatus", "", child )
 	setVar( SESSIONSID, "TransportState", "STOPPED", child )
+	-- Do NOT clear ResumePoint or ResumeTitle
 end
 
 local function clearServerSessions( server )
@@ -515,6 +517,7 @@ local function updateSession( sdata, session, server )
 
 	if sdata.NowPlayingItem then
 		D("updateSession() %1 playing %2", sdata.DeviceName, sdata.NowPlayingItem)
+		setVar( SESSIONSID, "PlayingSince", os.time(), session )
 		setVar( SESSIONSID, "PlayingItemId", sdata.NowPlayingItem.Id, session )
 		setVar( SESSIONSID, "PlayingItemType", sdata.NowPlayingItem.Type, session )
 		setVar( SESSIONSID, "PlayingItemMediaType", sdata.NowPlayingItem.MediaType, session )
@@ -624,12 +627,16 @@ local function updateSessions( server, taskid )
 -- luup.log(json.encode(sess),2)
 					childSessions[ sess.Id  ] = nil
 					updateSession( sess, child, server )
-					anyPlaying = anyPlaying or ( sess.NowPlayingItem ~= nil )
+					-- Child is active if currently playing or has played/update in last 60 seconds
+					local childActive = sess.NowPlayingItem ~= nil or 
+						( os.time() - getVarNumeric( "PlayingSince", 0, child, SESSIONSID ) ) < getVarNumeric( "SessionTimeout", 60, child, SESSIONSID )
+					D("updateSessions() childActive %1", childActive)
+					anyPlaying = anyPlaying or childActive
 					local show = luup.variable_get( SESSIONSID, "Visibility", child ) or ""
 					if string.find(":show:hide:", show) then
 						luup.attr_set( "invisible", ( show == "hide" ) and "1" or "0", child )
-					elseif getVarNumeric( "HideIdle", 0, server, SERVERSID ) ~= 0 then
-						luup.attr_set( "invisible", ( sess.NowPlayingItem == nil ) and "1" or "0", child )
+					elseif not childActive and getVarNumeric( "HideIdle", 0, server, SERVERSID ) ~= 0 then
+						luup.attr_set( "invisible", "1", child )
 					else
 						luup.attr_set( "invisible", "0", child )
 					end
@@ -664,7 +671,7 @@ local function updateSessions( server, taskid )
 	local now = os.time()
 	local lastPlaying = getVarNumeric( "LastPlaying", 0, server, SERVERSID )
 	D("updateSession() server %1 lastPlaying %2 now %3 anyPlaying %4", server, lastPlaying, now, anyPlaying)
-	local idleTick = ( not anyPlaying ) and ( lastPlaying < (now-60) )
+	local idleTick = ( not anyPlaying ) and ( lastPlaying < (now - getVarNumeric( "IdleTimeout", 300, server, SERVERSID ) ) )
 	if anyPlaying then setVar( SERVERSID, "LastPlaying", now, server ) end
 
 	-- Reschedule for update -- ??? TIMING FIXME?
@@ -769,8 +776,8 @@ local function initServer( server )
 	initVar( "LastUpdate", "0", server, SERVERSID )
 	initVar( "APIKey", "", server, SERVERSID )
 	initVar( "UserId", "", server, SERVERSID )
-	initVar( "SessionUpdateIntervalIdle", "", server, SERVERSID )
-	initVar( "SessionUpdateIntervalPlaying", "", server, SERVERSID )
+	initVar( "SessionUpdateIntervalIdle", "60", server, SERVERSID )
+	initVar( "SessionUpdateIntervalPlaying", "5", server, SERVERSID )
 	initVar( "SmartSkipDefault", "", server, SERVERSID )
 	initVar( "SmartSkipGrace", "", server, SERVERSID )
 	initVar( "HideOffline", "0", server, SERVERSID )
@@ -778,6 +785,7 @@ local function initServer( server )
 	initVar( "Bookmarks", "{}", server, SERVERSID )
 	initVar( "FilterClients", "^emby mobile", server, SERVERSID )
 	initVar( "FilterDeviceNames", "", server, SERVERSID )
+	initVar( "IdleTimeout", "300", server, SERVERSID )
 	if getVarNumeric( "Version", 0, server, SERVERSID ) < 000101 then
 		luup.attr_set( 'category_num', 1, server )
 	end
@@ -1302,6 +1310,7 @@ function actionSessionResumeMedia( pdev, restart, bookmark )
 			L({level=1,msg="Can't resume to bookmark %1: bookmark does not exist"}, bookmark)
 			return false
 		end
+		L("Resuming media from bookmark %1 %3 state %2", bookmark, state, bookmarks[bookmark].title or "?")
 	else
 		if state ~= "STOPPED" then
 			L({level=2,msg="%1 (%2) can't ResumeMedia, already playing (%3)"},
@@ -1350,13 +1359,26 @@ function actionSessionBookmarkMedia( pdev, name )
 	local state = luup.variable_get( SESSIONSID, "ResumePoint", pdev ) or ""
 	if state ~= "" then
 		local s = luup.variable_get( SERVERSID, "Bookmarks", server ) or "{}"
+		local title = luup.variable_get( SESSIONSID, "ResumeTitle", pdev ) or ""
 		local bookmarks = json.decode( s ) or {}
-		bookmarks[ name ] = { name=name, created=os.time(), position=state }
+		bookmarks[ name ] = { name=name, created=os.time(), title=title, position=state }
 		luup.variable_set( SERVERSID, "Bookmarks", json.encode( bookmarks ), server )
+		L("Bookmark %1 saved %3 state %2", name, state, title )
 		return true
 	end
 	L({level=1,msg="Can't bookmark session: no current resume point."})
 	return false
+end
+
+--[[ Wake up the session: update it so it appears to be active. Then
+     stimulate the server.
+--]]
+function actionSessionWakeup( pdev, duration )
+	duration = tonumber( duration ) or 60
+	if duration < 60 then duration = 60 elseif duration > 3600 then duration = 3600 end
+	local server = getVarNumeric( "Server", 0, pdev, SESSIONSID )
+	setVar( SESSIONSID, "PlayingSince", os.time()+duration-60, pdev )
+	scheduleDelay( tostring(server), 1 )
 end
 
 --[[ "SmartSkip". The Emby RemoteControl API has NextTrack/PreviousTrack, and

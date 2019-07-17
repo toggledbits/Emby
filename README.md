@@ -41,6 +41,16 @@ Several clients report that they support "ToggleMute," but the command has no ef
 
 I discovered early on that the Emby remote control API's `PreviousTrack` and `NextTrack` commands work for audio, but do nothing when a movie is playing. Moving around a movie makes a bit of sense, so, if a video is playing and has chapter information embedded and reported by the server, the plugin will use that chapter information to seek to the previous or next chapter relative to the current play position. If there is no chapter data in the video, a 30-second skip backward or forward will occur.
 
+### Bookmarks - Play Save and Resume
+
+The current position of playing media can be saved in a named bookmark. The bookmark can later be "resumed" on any session of the same server.
+
+### Wakeup
+
+Because the Emby Plugin has to poll the Emby server(s), the plugin attempts to discern when no sessions are active and reduce its polling rate to reduce network traffic and CPU utilization of the Vera. When sessions are active, the plugin will poll every 5 seconds (default, configurable via `SessionUpdateIntervalPlaying` on the server device) for session updates; when no sessions are active, the plugin will reduce the polling to every 60 seconds (default, configurable via `SessionUpdateIntervalIdle`).
+
+This means that an idle server, polling every 60 seconds, may take up to that long to discover that one of it's sessions is now active and make the transition to more frequent polling. That results in the status display for the newly active session being slow to begin updating. In order to ease this under circumstances where it can be reasonably expected that a session may soon be used (e.g. a session related to a home theater configuration when the scene to set up the theater for viewing is run), the `Wakeup` action can be used on a session to briefly wake up the idle session/server and increase the polling rate.
+
 ### Hiding Sessions and Reducing Device UI Clutter
 
 Emby servers can end up having a lot of clients, and the presentation of all of those clients as child devices in the Vera UI can lead to quite a bit of clutter. Two options for automatically hiding sessions are available: hide offline sessions, and hide idle sessions. The visibility of individual sessions can be controlled via the "Sessions" tab on the Emby Server device. This lets you force hide or show a session, overriding the automatic hiding actions of the plugin if those features are enabled.
@@ -121,6 +131,7 @@ The `ViewMedia` action moves the client's user interface to the given media item
 * `MediaType` (optional) - The Emby media type of the item (only used when Title is given and Id is not), to help narrow the search result.
 
 #### BookmarkMedia
+
 The `BookmarkMedia` action takes the current media item and position playing on a session and bookmarks it under the name given in the (solitary) `Bookmark` parameter. The media item can be resumed from the saved position invoking the `ResumeMedia` action with the bookmark name in its `Bookmark` parameter.
 
 Bookmarks are stored in the server device, so a bookmark created in one session can be resumed in another, as long as the two sessions belong to the same server. For example, you can bookmark a movie on your phone, pause it, and then go resume it on your TV.
@@ -129,7 +140,7 @@ Bookmarks are stored in the server device, so a bookmark created in one session 
 
 The `ResumeMedia` action is a plugin-provided enhancement. Currently, Emby servers do not offer API access to the queue of clients--we can see the media item that is currently playing, but not what played previously or may be playing next. As a result, when you `Stop` play on an Emby session, there is no Emby way to resume plaing the full queue (as one can do on Sonos, for example, where the queue is treated as a persistent, anonymous playlist). The action simply restarts play of the last known playing media item at the last checkpoint recorded. The optional `Restart` parameter may be given as "1" to force the media item to start playing from its beginning rather than the checkpoint.
 
-The *optional* `Bookmark` parameter, when given, will resume the media item associated with the bookmark at the bookmarked position. See `BookmarkMedia` above.
+The *optional* `Bookmark` parameter, when given, will resume the media item associated with the bookmark at the bookmarked position. See `BookmarkMedia` above. If not given, the previously-playing media item on the session will be restarted from the last known position (this presumes that the session was previously and is now *stopped*).
 
 #### SetVolume
 
@@ -145,6 +156,10 @@ The `Message` action causes a message to display on the Emby client (if active).
 #### Refresh
 
 The `Refresh` action forces the plugin to re-query the session state and update the display. Avoid invoking this action frequently, as it creates a load on both the Vera and Emby server for very little benefit.
+
+#### Wakeup
+
+The `Wakeup` action takes an optional `duration` parameter to wake up a session and increase the polling rate of the plugin in anticipation of an idle session being used. This would apply, for example, in a home theater when running a scene to set up the theater. In this case, it may be useful to wake up the Emby session so that when media begins playing, the status display updates more quickly (it could otherwise take the plugin up to 60 seconds to determine that the previously idle session was now active). The `duration`, when used, is given in seconds and must be in the range of 60 to 3600; the default is 60.
 
 ## LICENSE
 

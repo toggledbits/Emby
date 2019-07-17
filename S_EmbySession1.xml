@@ -223,6 +223,17 @@
 			<argumentList/>
 		</action>
 		<action>
+			<!-- Refresh data from server -->
+			<name>Wakeup</name>
+			<argumentList>
+				<argument>
+				   <name>duration</name>
+				   <direction>in</direction>
+				   <relatedStateVariable>A_ARG_TYPE_ui4</relatedStateVariable>
+				</argument>
+			</argumentList>
+		</action>
+		<action>
 			<!-- Set volume 0-100 -->
 			<name>SetVolume</name>
 			<argumentList>
