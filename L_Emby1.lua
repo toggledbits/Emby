@@ -8,10 +8,11 @@
 module("L_Emby1", package.seeall)
 
 local debugMode = false
+local bypassVersionCheck = true
 
 local _PLUGIN_ID = 9181
 local _PLUGIN_NAME = "Emby"
-local _PLUGIN_VERSION = "1.4develop-19198"
+local _PLUGIN_VERSION = "1.4develop-20353"
 local _PLUGIN_URL = "https://www.toggledbits.com/emby"
 local _CONFIGVERSION = 19198
 
@@ -103,6 +104,7 @@ local function D(msg, ...)
 end
 
 local function checkVersion(dev)
+	if bypassVersionCheck then return true end
 	local ui7Check = luup.variable_get(MYSID, "UI7Check", dev) or ""
 	if isOpenLuup then
 		return true

@@ -1,7 +1,8 @@
 # Change Log
 
-## Version 1.4 (development)
+## Version 1.4 (development 20353)
 
+* Support for ALTUI 2.52
 * Enhancement: Add `Wakeup` action for sessions to force session to appear action for a short period (optional `duration` parameter for time in seconds, default 60). It is recommended this be used by scenes configuring home theaters, etc. when it's likely that an otherwise-idle Emby session is about to be used. By forcing the session awake, the plugin will more quickly respond to first changes in play state (active sessions are updated every 5 seconds by default rather than every 60 seconds, so waking the session up puts on 5-second updates).
 
 ## Version 1.3 (released)

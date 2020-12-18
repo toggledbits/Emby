@@ -11,7 +11,7 @@
 
 var EmbyServer = (function(api, $) {
 
-	var pluginVersion = '1.4develop-19198';
+	var pluginVersion = '1.4develop-20353';
 
 	/* unique identifier for this plugin... */
 	var uuid = 'fbef24d8-0bc1-11e9-b678-74d4351650de'; //EmbyServer190103
@@ -67,7 +67,7 @@ var EmbyServer = (function(api, $) {
 
 		header();
 
-		var html = '<div id="sessions" class="embytab" />';
+		var html = '<div id="sessions" class="embytab"></div>';
 		html += footer();
 		api.setCpanelContent( html );
 
@@ -80,10 +80,10 @@ var EmbyServer = (function(api, $) {
 		jQuery( "input#hideidle", container ).prop( 'checked', "0" !== s );
 		jQuery( "input", container ).on( 'change.emby', handleServerOptionChange );
 
-		var mm = jQuery( '<select class="vismenu form-control form-control-sm" />' );
-		mm.append( jQuery( '<option/>' ).val('auto').text('Auto') );
-		mm.append( jQuery( '<option/>' ).val('show').text('Always Show') );
-		mm.append( jQuery( '<option/>' ).val('hide').text('Always Hide') );
+		var mm = jQuery( '<select class="vismenu form-control form-control-sm"></select>' );
+		mm.append( jQuery( '<option></option>' ).val('auto').text('Auto') );
+		mm.append( jQuery( '<option></option>' ).val('show').text('Always Show') );
+		mm.append( jQuery( '<option></option>' ).val('hide').text('Always Hide') );
 
 		var ud = api.getUserData();
 		var pluginDevice = ud.devices[ api.getDeviceIndex( myid ) ].id_parent;
@@ -92,12 +92,12 @@ var EmbyServer = (function(api, $) {
 				var devnum = ud.devices[ix].id;
 
 				/* Build row for display */
-				var row = jQuery( '<div class="row" />' );
+				var row = jQuery( '<div class="row"></div>' );
 				row.attr( 'id', devnum );
-				var el = jQuery( '<div class="col-xs-8 col-lg-4" />' );
+				var el = jQuery( '<div class="col-xs-8 col-lg-4"></div>' );
 				el.append( ud.devices[ix].name + ' (#' + devnum + ')' );
 				row.append( el );
-				el = jQuery( '<div class="col-xs-4 col-lg-2" />' );
+				el = jQuery( '<div class="col-xs-4 col-lg-2"></div>' );
 				el.append( mm.clone().attr( 'id', devnum ).on( 'change.emby', handleSessionVisibilityChange ) );
 				row.append( el );
 				jQuery( 'div#sessions.embytab' ).append( row );
